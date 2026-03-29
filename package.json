@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "predeploy": "npm run build",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
