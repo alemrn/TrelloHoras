@@ -1,0 +1,5 @@
+{
+  "name": "Trello Time Tracker",
+  "description": "Track time spent on Trello cards with a stopwatch and daily summaries.",
+  "requestFramePermissions": []
+}
