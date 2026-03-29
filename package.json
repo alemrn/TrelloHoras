@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://alemrn.github.io/TrelloHoras"
+  "homepage": "https://alemrn.github.io/TrelloHoras",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
