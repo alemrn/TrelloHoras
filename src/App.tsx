@@ -56,6 +56,30 @@ const normalizeEntries = (savedEntries: TimeEntry[]) =>
     imputed: Boolean(entry.imputed),
   }));
 
+const formatISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getCurrentWeekdays = () => {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+  const monday = new Date(today);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(today.getDate() + diffToMonday);
+
+  return Array.from({ length: 5 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return date;
+  });
+};
+
+const weekdayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+
 export default function App() {
   const [entries, setEntries] = useState<TimeEntry[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -209,6 +233,35 @@ export default function App() {
         imputedCards: Object.values(daySummary.imputedCards).sort((a, b) => b.hours - a.hours),
         pendingCards: Object.values(daySummary.pendingCards).sort((a, b) => b.hours - a.hours),
       }));
+  }, [entries]);
+
+  const weeklySummary = useMemo(() => {
+    const summaryByDate = entries.reduce<Record<string, { imputed: number; pending: number }>>((acc, entry) => {
+      if (!acc[entry.date]) {
+        acc[entry.date] = { imputed: 0, pending: 0 };
+      }
+
+      if (entry.imputed) {
+        acc[entry.date].imputed += entry.hours;
+      } else {
+        acc[entry.date].pending += entry.hours;
+      }
+
+      return acc;
+    }, {});
+
+    return getCurrentWeekdays().map((date, index) => {
+      const isoDate = formatISODate(date);
+      const totals = summaryByDate[isoDate] ?? { imputed: 0, pending: 0 };
+
+      return {
+        label: weekdayLabels[index],
+        date: isoDate,
+        imputedTotal: totals.imputed,
+        pendingTotal: totals.pending,
+        total: totals.imputed + totals.pending,
+      };
+    });
   }, [entries]);
 
   const formatTime = (seconds: number) => {
@@ -489,7 +542,50 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            {weeklySummary.length > 0 && (
+              <section className="bg-white rounded-lg border border-[#DFE1E6] shadow-sm overflow-hidden">
+                <div className="px-4 py-2 border-b border-[#DFE1E6] bg-[#F4F5F7] flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[#172B4D] leading-tight">Resumen semanal</h3>
+                    <p className="text-xs text-[#5E6C84] leading-tight">Semana actual, lunes a viernes</p>
+                  </div>
+                  <span className="text-[11px] font-medium bg-[#DFE1E6] text-[#172B4D] px-2 py-1 rounded-full whitespace-nowrap">
+                    {weeklySummary.reduce((total, day) => total + day.total, 0)}h totales
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-[repeat(5,minmax(0,1fr))] gap-2 p-2.5">
+                  {weeklySummary.map((day) => (
+                    <article
+                      key={day.date}
+                      className="min-w-0 rounded-md border border-[#DFE1E6] bg-[#FAFBFC] p-2 flex flex-col gap-1.5"
+                    >
+                      <div className="pb-1.5 border-b border-[#DFE1E6]">
+                        <p className="text-[13px] font-bold text-[#172B4D] leading-none truncate">{day.label}</p>
+                        <p className="text-[10px] text-[#5E6C84] mt-1 leading-none truncate">{day.date}</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="rounded-md bg-[#DEEBFF] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#0747A6] leading-none">Total</p>
+                          <p className="text-sm font-bold text-[#0052CC] leading-none mt-1">{day.total}h</p>
+                        </div>
+                        <div className="rounded-md bg-[#F3FFF8] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#006644] leading-none">Imputadas</p>
+                          <p className="text-xs font-bold text-[#006644] leading-none mt-1">{day.imputedTotal}h</p>
+                        </div>
+                        <div className="rounded-md bg-[#FFF7F3] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#BF2600] leading-none">Sin imputar</p>
+                          <p className="text-xs font-bold text-[#BF2600] leading-none mt-1">{day.pendingTotal}h</p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-[#0052CC]" />
@@ -511,66 +607,66 @@ export default function App() {
             ) : (
               dailySummary.map((day) => (
                 <section key={day.date} className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-[#DFE1E6] bg-[#F4F5F7] flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="px-4 py-3 border-b border-[#DFE1E6] bg-[#F4F5F7] flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-[#172B4D]">{day.date}</h3>
-                      <p className="text-sm text-[#5E6C84]">Total {day.total}h</p>
+                      <h3 className="text-base font-bold text-[#172B4D] leading-tight">{day.date}</h3>
+                      <p className="text-xs text-[#5E6C84] mt-1">Total {day.total}h</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-[#E3FCEF] text-[#006644]">
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[#E3FCEF] text-[#006644] whitespace-nowrap">
                         Imputadas {day.imputedTotal}h
                       </span>
-                      <span className="text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-[#FFEBE6] text-[#BF2600]">
+                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[#FFEBE6] text-[#BF2600] whitespace-nowrap">
                         Sin imputar {day.pendingTotal}h
                       </span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2">
-                    <div className="p-6 border-b border-[#DFE1E6] lg:border-b-0 lg:border-r">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-bold uppercase tracking-wider text-[#006644]">Imputadas</h4>
-                        <span className="text-sm font-bold text-[#006644]">{day.imputedTotal}h</span>
+                    <div className="p-4 border-b border-[#DFE1E6] lg:border-b-0 lg:border-r">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#006644]">Imputadas</h4>
+                        <span className="text-xs font-bold text-[#006644]">{day.imputedTotal}h</span>
                       </div>
 
                       {day.imputedCards.length === 0 ? (
-                        <p className="text-sm text-[#5E6C84]">Sin tarjetas imputadas.</p>
+                        <p className="text-xs text-[#5E6C84]">Sin tarjetas imputadas.</p>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {day.imputedCards.map((card) => (
-                            <div key={`imputed-${day.date}-${card.url}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-4 py-3 flex items-center justify-between gap-4">
+                            <div key={`imputed-${day.date}-${card.url}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0052CC] hover:underline">
+                                <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
                                   Ver enlace
                                 </a>
                               </div>
-                              <span className="text-sm font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
+                              <span className="text-xs font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-bold uppercase tracking-wider text-[#BF2600]">Sin imputar</h4>
-                        <span className="text-sm font-bold text-[#BF2600]">{day.pendingTotal}h</span>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#BF2600]">Sin imputar</h4>
+                        <span className="text-xs font-bold text-[#BF2600]">{day.pendingTotal}h</span>
                       </div>
 
                       {day.pendingCards.length === 0 ? (
-                        <p className="text-sm text-[#5E6C84]">Sin tarjetas pendientes.</p>
+                        <p className="text-xs text-[#5E6C84]">Sin tarjetas pendientes.</p>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {day.pendingCards.map((card) => (
-                            <div key={`pending-${day.date}-${card.url}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-4 py-3 flex items-center justify-between gap-4">
+                            <div key={`pending-${day.date}-${card.url}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0052CC] hover:underline">
+                                <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
                                   Ver enlace
                                 </a>
                               </div>
-                              <span className="text-sm font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
+                              <span className="text-xs font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
                             </div>
                           ))}
                         </div>
