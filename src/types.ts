@@ -1,6 +1,7 @@
 export interface TimeEntry {
   id: string;
-  cardUrl: string;
+  taskId: string;
+  cardUrl?: string | null;
   cardTitle: string;
   date: string; // ISO date string (YYYY-MM-DD)
   hours: number;
@@ -8,7 +9,8 @@ export interface TimeEntry {
 }
 
 export interface ActiveTimer {
-  cardUrl: string;
+  cardUrl?: string | null;
   cardTitle: string;
+  taskId: string;
   startTime: number; // timestamp
 }

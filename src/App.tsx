@@ -15,13 +15,17 @@ import {
   ExternalLink,
   Trash2,
   Calendar as CalendarIcon,
-  Timer
+  Timer,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TimeEntry, ActiveTimer } from './types';
 
 const STORAGE_KEY = 'trello-time-entries';
 const FALLBACK_CARD_TITLE = 'Trello Card';
+const FALLBACK_TASK_TITLE = 'Tarea sin nombre';
+
+type TaskInputMode = 'url' | 'name';
 
 const toTitleCase = (text: string) =>
   text
@@ -49,12 +53,56 @@ const extractTitleFromUrl = (url: string) => {
   }
 };
 
+const isValidHttpUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const normalizeTaskTitle = (title?: string | null) => {
+  const trimmedTitle = title?.replace(/\s+/g, ' ').trim();
+  return trimmedTitle || FALLBACK_TASK_TITLE;
+};
+
+const normalizeTaskIdentity = (title?: string | null) =>
+  normalizeTaskTitle(title)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase();
+
+const buildTaskKey = (cardUrl?: string | null, cardTitle?: string | null) => {
+  if (cardUrl?.trim()) {
+    return `url:${cardUrl.trim()}`;
+  }
+
+  return `title:${normalizeTaskIdentity(cardTitle)}`;
+};
+
+const buildLegacyTaskId = (entry: Partial<TimeEntry>) => {
+  const rawKey = entry.cardUrl?.trim() || entry.cardTitle?.trim() || crypto.randomUUID();
+  return `legacy:${rawKey}`;
+};
+
 const normalizeEntries = (savedEntries: TimeEntry[]) =>
-  savedEntries.map(entry => ({
-    ...entry,
-    cardTitle: extractTitleFromUrl(entry.cardUrl),
-    imputed: Boolean(entry.imputed),
-  }));
+  savedEntries.reduce<TimeEntry[]>((acc, entry) => {
+    const cardUrl = entry.cardUrl?.trim() || null;
+    const cardTitle = cardUrl ? extractTitleFromUrl(cardUrl) : normalizeTaskTitle(entry.cardTitle);
+    const taskKey = buildTaskKey(cardUrl, cardTitle);
+    const sharedTaskId = acc.find(savedEntry => buildTaskKey(savedEntry.cardUrl, savedEntry.cardTitle) === taskKey)?.taskId;
+
+    acc.push({
+      ...entry,
+      taskId: sharedTaskId || entry.taskId || buildLegacyTaskId(entry),
+      cardUrl,
+      cardTitle,
+      imputed: Boolean(entry.imputed),
+    });
+
+    return acc;
+  }, []);
 
 const formatISODate = (date: Date) => {
   const year = date.getFullYear();
@@ -90,7 +138,14 @@ export default function App() {
   const [view, setView] = useState<'tracker' | 'summary'>('tracker');
   const [isAddingManual, setIsAddingManual] = useState(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
-  const [tempUrl, setTempUrl] = useState('');
+  const [timerInputMode, setTimerInputMode] = useState<TaskInputMode>('url');
+  const [tempTaskValue, setTempTaskValue] = useState('');
+  const [manualInputMode, setManualInputMode] = useState<TaskInputMode>('url');
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingMode, setEditingMode] = useState<TaskInputMode>('name');
+  const [editingValue, setEditingValue] = useState('');
+  const [editingHours, setEditingHours] = useState('');
 
   // Persistence
   useEffect(() => {
@@ -114,16 +169,35 @@ export default function App() {
     return Math.ceil(hours * 2) / 2;
   };
 
+  const findTaskId = (cardUrl?: string | null, cardTitle?: string | null, excludedTaskId?: string | null) => {
+    const taskKey = buildTaskKey(cardUrl, cardTitle);
+
+    return entries.find(entry => (
+      entry.taskId !== excludedTaskId &&
+      buildTaskKey(entry.cardUrl, entry.cardTitle) === taskKey
+    ))?.taskId;
+  };
+
   const handleStartTimer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tempUrl) return;
+    const trimmedValue = tempTaskValue.trim();
+    if (!trimmedValue) return;
+    if (timerInputMode === 'url' && !isValidHttpUrl(trimmedValue)) return;
+
+    const nextCardUrl = timerInputMode === 'url' ? trimmedValue : null;
+    const nextCardTitle = timerInputMode === 'url'
+      ? extractTitleFromUrl(trimmedValue)
+      : normalizeTaskTitle(trimmedValue);
+    const taskId = findTaskId(nextCardUrl, nextCardTitle) || crypto.randomUUID();
     
     setActiveTimer({
-      cardUrl: tempUrl,
-      cardTitle: extractTitleFromUrl(tempUrl),
+      taskId,
+      cardUrl: nextCardUrl,
+      cardTitle: nextCardTitle,
       startTime: Date.now()
     });
-    setTempUrl('');
+    setTempTaskValue('');
+    setTimerInputMode('url');
     setIsTimerModalOpen(false);
   };
 
@@ -135,6 +209,7 @@ export default function App() {
     
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
+      taskId: activeTimer.taskId,
       cardUrl: activeTimer.cardUrl,
       cardTitle: activeTimer.cardTitle,
       date: new Date().toISOString().split('T')[0],
@@ -149,17 +224,23 @@ export default function App() {
   const handleManualAdd = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const url = formData.get('url') as string;
+    const mode = formData.get('taskMode') as TaskInputMode;
+    const taskValue = (formData.get(mode === 'url' ? 'url' : 'title') as string)?.trim();
     const hoursInput = parseFloat(formData.get('hours') as string);
     
-    if (!url || isNaN(hoursInput)) return;
+    if (!taskValue || isNaN(hoursInput)) return;
+    if (mode === 'url' && !isValidHttpUrl(taskValue)) return;
 
     const roundedHours = roundToHalf(hoursInput);
+    const cardUrl = mode === 'url' ? taskValue : null;
+    const cardTitle = mode === 'url' ? extractTitleFromUrl(taskValue) : normalizeTaskTitle(taskValue);
+    const taskId = findTaskId(cardUrl, cardTitle) || crypto.randomUUID();
 
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
-      cardUrl: url,
-      cardTitle: extractTitleFromUrl(url),
+      taskId,
+      cardUrl,
+      cardTitle,
       date: new Date().toISOString().split('T')[0],
       hours: roundedHours,
       imputed: false,
@@ -167,6 +248,57 @@ export default function App() {
 
     setEntries(prev => [newEntry, ...prev]);
     setIsAddingManual(false);
+  };
+
+  const openTaskEditor = (entry: TimeEntry) => {
+    setEditingEntryId(entry.id);
+    setEditingTaskId(entry.taskId);
+    setEditingMode(entry.cardUrl ? 'url' : 'name');
+    setEditingValue(entry.cardUrl || entry.cardTitle);
+    setEditingHours(entry.hours.toString());
+  };
+
+  const handleSaveTaskEdit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingTaskId || !editingEntryId) return;
+
+    const trimmedValue = editingValue.trim();
+    if (!trimmedValue) return;
+    if (editingMode === 'url' && !isValidHttpUrl(trimmedValue)) return;
+
+    const hoursInput = parseFloat(editingHours);
+    if (isNaN(hoursInput) || hoursInput <= 0) return;
+
+    const nextCardUrl = editingMode === 'url' ? trimmedValue : null;
+    const nextCardTitle = editingMode === 'url'
+      ? extractTitleFromUrl(trimmedValue)
+      : normalizeTaskTitle(trimmedValue);
+    const nextTaskId = findTaskId(nextCardUrl, nextCardTitle, editingTaskId) || editingTaskId;
+    const roundedHours = roundToHalf(hoursInput);
+
+    setEntries(prev =>
+      prev.map(entry =>
+        entry.taskId === editingTaskId || entry.id === editingEntryId
+          ? {
+              ...entry,
+              ...(entry.taskId === editingTaskId ? {
+                taskId: nextTaskId,
+                cardUrl: nextCardUrl,
+                cardTitle: nextCardTitle,
+              } : {}),
+              ...(entry.id === editingEntryId ? {
+                hours: roundedHours,
+              } : {}),
+            }
+          : entry
+      )
+    );
+
+    setEditingEntryId(null);
+    setEditingTaskId(null);
+    setEditingMode('name');
+    setEditingValue('');
+    setEditingHours('');
   };
 
   const handleDeleteEntry = (id: string) => {
@@ -189,8 +321,8 @@ export default function App() {
         total: number;
         imputedTotal: number;
         pendingTotal: number;
-        imputedCards: Record<string, { title: string; hours: number; url: string }>;
-        pendingCards: Record<string, { title: string; hours: number; url: string }>;
+        imputedCards: Record<string, { title: string; hours: number; url: string | null }>;
+        pendingCards: Record<string, { title: string; hours: number; url: string | null }>;
       }
     > = {};
 
@@ -210,16 +342,16 @@ export default function App() {
 
       if (e.imputed) {
         daySummary.imputedTotal += e.hours;
-        if (!daySummary.imputedCards[e.cardUrl]) {
-          daySummary.imputedCards[e.cardUrl] = { title: e.cardTitle, hours: 0, url: e.cardUrl };
+        if (!daySummary.imputedCards[e.taskId]) {
+          daySummary.imputedCards[e.taskId] = { title: e.cardTitle, hours: 0, url: e.cardUrl ?? null };
         }
-        daySummary.imputedCards[e.cardUrl].hours += e.hours;
+        daySummary.imputedCards[e.taskId].hours += e.hours;
       } else {
         daySummary.pendingTotal += e.hours;
-        if (!daySummary.pendingCards[e.cardUrl]) {
-          daySummary.pendingCards[e.cardUrl] = { title: e.cardTitle, hours: 0, url: e.cardUrl };
+        if (!daySummary.pendingCards[e.taskId]) {
+          daySummary.pendingCards[e.taskId] = { title: e.cardTitle, hours: 0, url: e.cardUrl ?? null };
         }
-        daySummary.pendingCards[e.cardUrl].hours += e.hours;
+        daySummary.pendingCards[e.taskId].hours += e.hours;
       }
     });
 
@@ -356,14 +488,38 @@ export default function App() {
                       <div className="p-6">
                         <h3 className="text-lg font-bold text-[#172B4D] mb-4">Nueva Tarea</h3>
                         <form onSubmit={handleStartTimer} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTimerInputMode('url');
+                                setTempTaskValue('');
+                              }}
+                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                            >
+                              URL Trello
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTimerInputMode('name');
+                                setTempTaskValue('');
+                              }}
+                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                            >
+                              Tarea provisional
+                            </button>
+                          </div>
                           <div>
-                            <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Enlace de la tarjeta de Trello</label>
+                            <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                              {timerInputMode === 'url' ? 'Enlace de la tarjeta de Trello' : 'Nombre de la tarea'}
+                            </label>
                             <input 
                               autoFocus
                               required
-                              value={tempUrl}
-                              onChange={(e) => setTempUrl(e.target.value)}
-                              placeholder="https://trello.com/c/..."
+                              value={tempTaskValue}
+                              onChange={(e) => setTempTaskValue(e.target.value)}
+                              placeholder={timerInputMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Refinar propuesta cliente'}
                               className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                             />
                           </div>
@@ -378,7 +534,8 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 setIsTimerModalOpen(false);
-                                setTempUrl('');
+                                setTempTaskValue('');
+                                setTimerInputMode('url');
                               }}
                               className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
                             >
@@ -410,15 +567,53 @@ export default function App() {
                   </button>
                 ) : (
                   <form onSubmit={handleManualAdd} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-[#5E6C84] mb-1">URL DE TRELLO</label>
-                      <input 
-                        name="url"
-                        required
-                        placeholder="https://trello.com/c/..."
-                        className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
-                      />
+                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                      <label className="cursor-pointer rounded-md">
+                        <input
+                          type="radio"
+                          name="taskMode"
+                          value="url"
+                          checked={manualInputMode === 'url'}
+                          onChange={() => setManualInputMode('url')}
+                          className="sr-only peer"
+                        />
+                        <span className="block rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                          URL Trello
+                        </span>
+                      </label>
+                      <label className="cursor-pointer rounded-md">
+                        <input
+                          type="radio"
+                          name="taskMode"
+                          value="name"
+                          checked={manualInputMode === 'name'}
+                          onChange={() => setManualInputMode('name')}
+                          className="sr-only peer"
+                        />
+                        <span className="block rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                          Tarea provisional
+                        </span>
+                      </label>
                     </div>
+                    {manualInputMode === 'url' ? (
+                      <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] mb-1">URL DE TRELLO</label>
+                        <input 
+                          name="url"
+                          placeholder="https://trello.com/c/..."
+                          className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-bold text-[#5E6C84] mb-1">NOMBRE TAREA PROVISIONAL</label>
+                        <input 
+                          name="title"
+                          placeholder="Ej: Revisión backlog sprint"
+                          className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-bold text-[#5E6C84] mb-1">HORAS</label>
                       <input 
@@ -508,18 +703,23 @@ export default function App() {
                                 <CalendarIcon className="w-3 h-3" />
                                 {entry.date}
                               </span>
+                              <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${entry.cardUrl ? 'bg-[#DEEBFF] text-[#0747A6]' : 'bg-[#FFFAE6] text-[#974F0C]'}`}>
+                                {entry.cardUrl ? 'Trello' : 'Provisional'}
+                              </span>
                               <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${entry.imputed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FFEBE6] text-[#BF2600]'}`}>
                                 {entry.imputed ? 'Imputada' : 'Sin imputar'}
                               </span>
-                              <a 
-                                href={entry.cardUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-xs text-[#0052CC] hover:underline flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Ver en Trello
-                              </a>
+                              {entry.cardUrl ? (
+                                <a 
+                                  href={entry.cardUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-[#0052CC] hover:underline flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  Ver en Trello
+                                </a>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -527,6 +727,13 @@ export default function App() {
                           <div className="text-right">
                             <span className="text-lg font-bold text-[#0052CC]">{entry.hours}h</span>
                           </div>
+                          <button 
+                            onClick={() => openTaskEditor(entry)}
+                            className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            aria-label={`Editar ${entry.cardTitle}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => handleDeleteEntry(entry.id)}
                             className="p-2 text-[#EB5A46] hover:bg-[#FFEBE6] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
@@ -634,12 +841,14 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {day.imputedCards.map((card) => (
-                            <div key={`imputed-${day.date}-${card.url}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`imputed-${day.date}-${card.url || card.title}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
-                                  Ver enlace
-                                </a>
+                                {card.url ? (
+                                  <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                    Ver enlace
+                                  </a>
+                                ) : null}
                               </div>
                               <span className="text-xs font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
                             </div>
@@ -659,12 +868,14 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {day.pendingCards.map((card) => (
-                            <div key={`pending-${day.date}-${card.url}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`pending-${day.date}-${card.url || card.title}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
-                                  Ver enlace
-                                </a>
+                                {card.url ? (
+                                  <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                    Ver enlace
+                                  </a>
+                                ) : null}
                               </div>
                               <span className="text-xs font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
                             </div>
@@ -679,6 +890,95 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <AnimatePresence>
+        {editingTaskId ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-[#172B4D] mb-4">Editar tarea</h3>
+                <form onSubmit={handleSaveTaskEdit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMode('url');
+                        setEditingValue('');
+                      }}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                    >
+                      URL Trello
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMode('name');
+                        setEditingValue('');
+                      }}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                    >
+                      Tarea provisional
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                      {editingMode === 'url' ? 'Nueva URL Trello' : 'Nombre tarea'}
+                    </label>
+                    <input
+                      autoFocus
+                      required
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      placeholder={editingMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Revisión backlog sprint'}
+                      className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                    />
+                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Horas registro</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      required
+                      value={editingHours}
+                      onChange={(e) => setEditingHours(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                    />
+                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro.</p>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 bg-[#0052CC] text-white rounded-md font-bold hover:bg-[#0747A6] transition-colors"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingEntryId(null);
+                        setEditingTaskId(null);
+                        setEditingMode('name');
+                        setEditingValue('');
+                        setEditingHours('');
+                      }}
+                      className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
