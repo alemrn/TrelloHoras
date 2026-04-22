@@ -21,11 +21,45 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TimeEntry, ActiveTimer } from './types';
 
 const STORAGE_KEY = 'trello-time-entries';
+const FALLBACK_CARD_TITLE = 'Trello Card';
+
+const toTitleCase = (text: string) =>
+  text
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const extractTitleFromUrl = (url: string) => {
+  try {
+    const { pathname } = new URL(url);
+    const parts = pathname.split('/').filter(Boolean);
+    const slug = parts.find(part => part.includes('-'));
+
+    if (!slug) {
+      return FALLBACK_CARD_TITLE;
+    }
+
+    const decodedSlug = decodeURIComponent(slug);
+    const normalizedSlug = decodedSlug.replace(/^[^-]+-/, '').replace(/-/g, ' ').trim();
+
+    return normalizedSlug ? toTitleCase(normalizedSlug) : FALLBACK_CARD_TITLE;
+  } catch {
+    return FALLBACK_CARD_TITLE;
+  }
+};
+
+const normalizeEntries = (savedEntries: TimeEntry[]) =>
+  savedEntries.map(entry => ({
+    ...entry,
+    cardTitle: extractTitleFromUrl(entry.cardUrl),
+    imputed: Boolean(entry.imputed),
+  }));
 
 export default function App() {
   const [entries, setEntries] = useState<TimeEntry[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    return saved ? normalizeEntries(JSON.parse(saved)) : [];
   });
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -56,16 +90,6 @@ export default function App() {
     return Math.ceil(hours * 2) / 2;
   };
 
-  const extractTitleFromUrl = (url: string) => {
-    try {
-      const parts = url.split('/');
-      const slug = parts.find(p => p.includes('-')) || 'Trello Card';
-      return slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    } catch {
-      return 'Trello Card';
-    }
-  };
-
   const handleStartTimer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tempUrl) return;
@@ -90,7 +114,8 @@ export default function App() {
       cardUrl: activeTimer.cardUrl,
       cardTitle: activeTimer.cardTitle,
       date: new Date().toISOString().split('T')[0],
-      hours: Math.max(0.5, roundedHours) // Minimum 0.5 if started
+      hours: Math.max(0.5, roundedHours), // Minimum 0.5 if started
+      imputed: false,
     };
 
     setEntries(prev => [newEntry, ...prev]);
@@ -112,7 +137,8 @@ export default function App() {
       cardUrl: url,
       cardTitle: extractTitleFromUrl(url),
       date: new Date().toISOString().split('T')[0],
-      hours: roundedHours
+      hours: roundedHours,
+      imputed: false,
     };
 
     setEntries(prev => [newEntry, ...prev]);
@@ -123,24 +149,66 @@ export default function App() {
     setEntries(prev => prev.filter(e => e.id !== id));
   };
 
+  const handleToggleImputed = (id: string) => {
+    setEntries(prev =>
+      prev.map(entry =>
+        entry.id === id ? { ...entry, imputed: !entry.imputed } : entry
+      )
+    );
+  };
+
   // Summaries
   const dailySummary = useMemo(() => {
-    const summary: Record<string, number> = {};
-    entries.forEach(e => {
-      summary[e.date] = (summary[e.date] || 0) + e.hours;
-    });
-    return Object.entries(summary).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [entries]);
-
-  const cardSummary = useMemo(() => {
-    const summary: Record<string, { title: string, hours: number, url: string }> = {};
-    entries.forEach(e => {
-      if (!summary[e.cardUrl]) {
-        summary[e.cardUrl] = { title: e.cardTitle, hours: 0, url: e.cardUrl };
+    const summary: Record<
+      string,
+      {
+        total: number;
+        imputedTotal: number;
+        pendingTotal: number;
+        imputedCards: Record<string, { title: string; hours: number; url: string }>;
+        pendingCards: Record<string, { title: string; hours: number; url: string }>;
       }
-      summary[e.cardUrl].hours += e.hours;
+    > = {};
+
+    entries.forEach(e => {
+      if (!summary[e.date]) {
+        summary[e.date] = {
+          total: 0,
+          imputedTotal: 0,
+          pendingTotal: 0,
+          imputedCards: {},
+          pendingCards: {},
+        };
+      }
+
+      const daySummary = summary[e.date];
+      daySummary.total += e.hours;
+
+      if (e.imputed) {
+        daySummary.imputedTotal += e.hours;
+        if (!daySummary.imputedCards[e.cardUrl]) {
+          daySummary.imputedCards[e.cardUrl] = { title: e.cardTitle, hours: 0, url: e.cardUrl };
+        }
+        daySummary.imputedCards[e.cardUrl].hours += e.hours;
+      } else {
+        daySummary.pendingTotal += e.hours;
+        if (!daySummary.pendingCards[e.cardUrl]) {
+          daySummary.pendingCards[e.cardUrl] = { title: e.cardTitle, hours: 0, url: e.cardUrl };
+        }
+        daySummary.pendingCards[e.cardUrl].hours += e.hours;
+      }
     });
-    return Object.values(summary).sort((a, b) => b.hours - a.hours);
+
+    return Object.entries(summary)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, daySummary]) => ({
+        date,
+        total: daySummary.total,
+        imputedTotal: daySummary.imputedTotal,
+        pendingTotal: daySummary.pendingTotal,
+        imputedCards: Object.values(daySummary.imputedCards).sort((a, b) => b.hours - a.hours),
+        pendingCards: Object.values(daySummary.pendingCards).sort((a, b) => b.hours - a.hours),
+      }));
   }, [entries]);
 
   const formatTime = (seconds: number) => {
@@ -366,6 +434,15 @@ export default function App() {
                         className="bg-white rounded-xl border border-[#DFE1E6] p-4 flex items-center justify-between group hover:border-[#0052CC] transition-all shadow-sm"
                       >
                         <div className="flex items-center gap-4 overflow-hidden">
+                          <label className="flex items-center justify-center flex-shrink-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={entry.imputed}
+                              onChange={() => handleToggleImputed(entry.id)}
+                              className="h-4 w-4 rounded border-[#C1C7D0] text-[#0052CC] focus:ring-[#0052CC]"
+                              aria-label={`Marcar ${entry.cardTitle} como imputada`}
+                            />
+                          </label>
                           <div className="bg-[#DEEBFF] text-[#0052CC] p-2.5 rounded-lg flex-shrink-0">
                             <Layout className="w-5 h-5" />
                           </div>
@@ -377,6 +454,9 @@ export default function App() {
                               <span className="text-xs text-[#5E6C84] flex items-center gap-1">
                                 <CalendarIcon className="w-3 h-3" />
                                 {entry.date}
+                              </span>
+                              <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${entry.imputed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FFEBE6] text-[#BF2600]'}`}>
+                                {entry.imputed ? 'Imputada' : 'Sin imputar'}
                               </span>
                               <a 
                                 href={entry.cardUrl} 
@@ -409,79 +489,97 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Daily Summary */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-[#0052CC]" />
-                  Horas por Día
-                </h2>
-                <div className="bg-white rounded-xl border border-[#DFE1E6] overflow-hidden shadow-sm">
-                  <table className="w-full text-left">
-                    <thead className="bg-[#F4F5F7] border-b border-[#DFE1E6]">
-                      <tr>
-                        <th className="px-6 py-3 text-xs font-bold text-[#5E6C84] uppercase tracking-wider">Fecha</th>
-                        <th className="px-6 py-3 text-xs font-bold text-[#5E6C84] uppercase tracking-wider text-right">Total Horas</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#DFE1E6]">
-                      {dailySummary.length === 0 ? (
-                        <tr>
-                          <td colSpan={2} className="px-6 py-8 text-center text-[#5E6C84] text-sm">Sin datos disponibles</td>
-                        </tr>
-                      ) : (
-                        dailySummary.map(([date, total]) => (
-                          <tr key={date} className="hover:bg-[#FAFBFC]">
-                            <td className="px-6 py-4 text-sm font-medium text-[#172B4D]">{date}</td>
-                            <td className="px-6 py-4 text-sm font-bold text-[#0052CC] text-right">{total}h</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Card Summary */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <Layout className="w-5 h-5 text-[#0052CC]" />
-                  Horas por Tarjeta
-                </h2>
-                <div className="bg-white rounded-xl border border-[#DFE1E6] overflow-hidden shadow-sm">
-                  <table className="w-full text-left">
-                    <thead className="bg-[#F4F5F7] border-b border-[#DFE1E6]">
-                      <tr>
-                        <th className="px-6 py-3 text-xs font-bold text-[#5E6C84] uppercase tracking-wider">Tarjeta</th>
-                        <th className="px-6 py-3 text-xs font-bold text-[#5E6C84] uppercase tracking-wider text-right">Total Horas</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#DFE1E6]">
-                      {cardSummary.length === 0 ? (
-                        <tr>
-                          <td colSpan={2} className="px-6 py-8 text-center text-[#5E6C84] text-sm">Sin datos disponibles</td>
-                        </tr>
-                      ) : (
-                        cardSummary.map((card) => (
-                          <tr key={card.url} className="hover:bg-[#FAFBFC]">
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-medium text-[#172B4D] truncate max-w-[200px]" title={card.title}>
-                                {card.title}
-                              </div>
-                              <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#0052CC] hover:underline">
-                                Ver enlace
-                              </a>
-                            </td>
-                            <td className="px-6 py-4 text-sm font-bold text-[#0052CC] text-right">{card.hours}h</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-[#0052CC]" />
+                Resumen por Día
+              </h2>
+              <span className="text-xs font-medium bg-[#DFE1E6] text-[#172B4D] px-2 py-1 rounded-full">
+                {dailySummary.length} días
+              </span>
             </div>
+
+            {dailySummary.length === 0 ? (
+              <div className="bg-white rounded-xl border border-[#DFE1E6] p-12 text-center shadow-sm">
+                <div className="bg-[#EBECF0] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CalendarIcon className="w-8 h-8 text-[#5E6C84]" />
+                </div>
+                <h3 className="text-[#172B4D] font-bold">Sin datos disponibles</h3>
+                <p className="text-[#5E6C84] text-sm mt-1">Añade registros para ver resumen diario.</p>
+              </div>
+            ) : (
+              dailySummary.map((day) => (
+                <section key={day.date} className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-[#DFE1E6] bg-[#F4F5F7] flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-[#172B4D]">{day.date}</h3>
+                      <p className="text-sm text-[#5E6C84]">Total {day.total}h</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-[#E3FCEF] text-[#006644]">
+                        Imputadas {day.imputedTotal}h
+                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-[#FFEBE6] text-[#BF2600]">
+                        Sin imputar {day.pendingTotal}h
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2">
+                    <div className="p-6 border-b border-[#DFE1E6] lg:border-b-0 lg:border-r">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-[#006644]">Imputadas</h4>
+                        <span className="text-sm font-bold text-[#006644]">{day.imputedTotal}h</span>
+                      </div>
+
+                      {day.imputedCards.length === 0 ? (
+                        <p className="text-sm text-[#5E6C84]">Sin tarjetas imputadas.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {day.imputedCards.map((card) => (
+                            <div key={`imputed-${day.date}-${card.url}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-4 py-3 flex items-center justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0052CC] hover:underline">
+                                  Ver enlace
+                                </a>
+                              </div>
+                              <span className="text-sm font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-[#BF2600]">Sin imputar</h4>
+                        <span className="text-sm font-bold text-[#BF2600]">{day.pendingTotal}h</span>
+                      </div>
+
+                      {day.pendingCards.length === 0 ? (
+                        <p className="text-sm text-[#5E6C84]">Sin tarjetas pendientes.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {day.pendingCards.map((card) => (
+                            <div key={`pending-${day.date}-${card.url}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-4 py-3 flex items-center justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0052CC] hover:underline">
+                                  Ver enlace
+                                </a>
+                              </div>
+                              <span className="text-sm font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              ))
+            )}
           </div>
         )}
       </main>
