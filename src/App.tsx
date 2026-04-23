@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TimeEntry, ActiveTimer } from './types';
 
 const STORAGE_KEY = 'trello-time-entries';
+const ROUNDING_MODE_KEY = 'trello-time-rounding-mode';
 const FALLBACK_CARD_TITLE = 'Trello Card';
 const FALLBACK_TASK_TITLE = 'Tarea sin nombre';
 
@@ -143,6 +144,10 @@ export default function App() {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [view, setView] = useState<'tracker' | 'summary'>('tracker');
+  const [isRoundModeEnabled, setIsRoundModeEnabled] = useState(() => {
+    const savedMode = localStorage.getItem(ROUNDING_MODE_KEY);
+    return savedMode ? savedMode === 'true' : true;
+  });
   const [isAddingManual, setIsAddingManual] = useState(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [timerInputMode, setTimerInputMode] = useState<TaskInputMode>('url');
@@ -166,6 +171,10 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }, [entries]);
 
+  useEffect(() => {
+    localStorage.setItem(ROUNDING_MODE_KEY, String(isRoundModeEnabled));
+  }, [isRoundModeEnabled]);
+
   // Timer logic
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -179,9 +188,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTimer]);
 
-  const roundToQuarter = (hours: number) => {
-    return Math.ceil(hours * 4) / 4;
+  const roundHours = (hours: number) => {
+    const step = isRoundModeEnabled ? 0.25 : 0.5;
+    return Math.ceil(hours / step) * step;
   };
+
+  const roundingStep = isRoundModeEnabled ? 0.25 : 0.5;
 
   const findTaskId = (cardUrl?: string | null, cardTitle?: string | null, excludedTaskId?: string | null) => {
     const taskKey = buildTaskKey(cardUrl, cardTitle);
@@ -247,7 +259,7 @@ export default function App() {
     if (!activeTimer) return;
     
     const hours = elapsedSeconds / 3600;
-    const roundedHours = roundToQuarter(hours);
+    const roundedHours = roundHours(hours);
     
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
@@ -256,7 +268,7 @@ export default function App() {
       cardTitle: activeTimer.cardTitle,
       comments: activeTimer.comments ?? getTaskComments(activeTimer.taskId),
       date: new Date().toISOString().split('T')[0],
-      hours: Math.max(0.25, roundedHours), // Minimum 0.25 if started
+      hours: Math.max(roundingStep, roundedHours),
       imputed: false,
     };
 
@@ -275,7 +287,7 @@ export default function App() {
     if (!taskValue || isNaN(hoursInput)) return;
     if (mode === 'url' && !isValidHttpUrl(taskValue)) return;
 
-    const roundedHours = roundToQuarter(hoursInput);
+    const roundedHours = roundHours(hoursInput);
     const cardUrl = mode === 'url' ? taskValue : null;
     const cardTitle = mode === 'url' ? extractTitleFromUrl(taskValue) : normalizeTaskTitle(taskValue);
     const taskId = findTaskId(cardUrl, cardTitle) || crypto.randomUUID();
@@ -325,7 +337,7 @@ export default function App() {
       ? extractTitleFromUrl(trimmedValue)
       : normalizeTaskTitle(trimmedValue);
     const nextTaskId = findTaskId(nextCardUrl, nextCardTitle, editingTaskId) || editingTaskId;
-    const roundedHours = roundToQuarter(hoursInput);
+    const roundedHours = roundHours(hoursInput);
     const nextComments = nextTaskId === editingTaskId
       ? getTaskComments(editingTaskId)
       : getTaskComments(nextTaskId);
@@ -517,30 +529,30 @@ export default function App() {
     <div className="min-h-screen bg-[#F4F5F7] text-[#172B4D] font-sans">
       {/* Header */}
       <header className="bg-white border-b border-[#DFE1E6] sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="bg-[#0052CC] p-1.5 rounded-md">
               <Clock className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-[#0052CC]">TrelloTime</h1>
           </div>
-          
+
           <nav className="flex gap-1 bg-[#EBECF0] p-1 rounded-lg">
-            <button 
-              onClick={() => setView('tracker')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
-            >
-              <Layout className="w-4 h-4" />
-              Tracker
-            </button>
-            <button 
-              onClick={() => setView('summary')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              Resumen
-            </button>
-          </nav>
+              <button 
+                onClick={() => setView('tracker')}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
+              >
+                <Layout className="w-4 h-4" />
+                Tracker
+              </button>
+              <button 
+                onClick={() => setView('summary')}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Resumen
+              </button>
+            </nav>
         </div>
       </header>
 
@@ -551,10 +563,41 @@ export default function App() {
             <div className="lg:col-span-1 space-y-6">
               {/* Active Timer Card */}
               <div className="bg-white rounded-xl border border-[#DFE1E6] p-6 shadow-sm">
-                <h2 className="text-sm font-semibold text-[#5E6C84] uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Timer className="w-4 h-4" />
-                  Cronómetro
-                </h2>
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="flex flex-1 items-center justify-between gap-3 min-w-0">
+                    <h2 className="text-sm font-semibold text-[#5E6C84] uppercase tracking-wider flex items-center gap-2">
+                      <Timer className="w-4 h-4" />
+                      Cronómetro
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setIsRoundModeEnabled(prev => !prev)}
+                      className="flex items-center gap-2"
+                      aria-pressed={isRoundModeEnabled}
+                      aria-label={`Modo Amaia ${isRoundModeEnabled ? 'activado' : 'desactivado'}`}
+                    >
+                      <span
+                        className={`relative h-6 w-10 rounded-full transition-colors ${isRoundModeEnabled ? 'bg-[#0052CC]' : 'bg-[#C1C7D0]'}`}
+                      >
+                        <span
+                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-all ${isRoundModeEnabled ? 'left-5' : 'left-1'}`}
+                        />
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-[#5E6C84]">
+                        {isRoundModeEnabled ? '0.25' : '0.5'}
+                      </span>
+                    </button>
+                  </div>
+                  {!activeTimer ? (
+                    <button 
+                      onClick={() => setIsTimerModalOpen(true)}
+                      className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm whitespace-nowrap max-[480px]:w-full"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Iniciar tarea
+                    </button>
+                  ) : null}
+                </div>
                 
                 {activeTimer ? (
                   <div className="space-y-4">
@@ -574,15 +617,7 @@ export default function App() {
                       Detener y Guardar
                     </button>
                   </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsTimerModalOpen(true)}
-                    className="w-full py-3 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    Iniciar Tarea
-                  </button>
-                )}
+                ) : null}
               </div>
 
               {/* Timer Modal */}
@@ -742,13 +777,13 @@ export default function App() {
                       <input 
                         name="hours"
                         type="number"
-                        step="0.25"
-                        min="0.25"
+                        step={roundingStep}
+                        min={roundingStep}
                         required
                         placeholder="Ej: 1.5"
                         className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                       />
-                      <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Redondeo al múltiplo superior 0.25.</p>
+                      <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Redondeo al múltiplo superior {roundingStep}.</p>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-[#5E6C84] mb-1">COMENTARIO</label>
@@ -812,74 +847,75 @@ export default function App() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        className="bg-white rounded-xl border border-[#DFE1E6] p-4 flex items-center justify-between group hover:border-[#0052CC] transition-all shadow-sm"
+                        className="group rounded-xl border border-[#DFE1E6] bg-white p-4 shadow-sm transition-all hover:border-[#0052CC]"
                       >
-                        <div className="flex items-center gap-4 overflow-hidden">
-                          <label className="flex items-center justify-center flex-shrink-0 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={entry.imputed}
-                              onChange={() => handleToggleImputed(entry.id)}
-                              className="h-4 w-4 rounded border-[#C1C7D0] text-[#0052CC] focus:ring-[#0052CC]"
-                              aria-label={`Marcar ${entry.cardTitle} como imputada`}
-                            />
-                          </label>
-                          <div className="bg-[#DEEBFF] text-[#0052CC] p-2.5 rounded-lg flex-shrink-0">
-                            <Layout className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-[#172B4D] truncate pr-4" title={entry.cardTitle}>
-                              {entry.cardTitle}
-                            </h4>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs text-[#5E6C84] flex items-center gap-1">
-                                <CalendarIcon className="w-3 h-3" />
-                                {entry.date}
-                              </span>
-                              <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${entry.cardUrl ? 'bg-[#DEEBFF] text-[#0747A6]' : 'bg-[#FFFAE6] text-[#974F0C]'}`}>
-                                {entry.cardUrl ? 'Trello' : 'Provisional'}
-                              </span>
-                              <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${entry.imputed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FFEBE6] text-[#BF2600]'}`}>
-                                {entry.imputed ? 'Imputada' : 'Sin imputar'}
-                              </span>
-                              {entry.cardUrl ? (
-                                <a 
-                                  href={entry.cardUrl} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-[#0052CC] hover:underline flex items-center gap-1"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                  Ver en Trello
-                                </a>
-                              ) : null}
+                        <div className="flex flex-col gap-3">
+                          <div className="flex min-w-0 gap-3">
+                            <label className="flex items-center justify-center flex-shrink-0 cursor-pointer pt-1">
+                              <input
+                                type="checkbox"
+                                checked={entry.imputed}
+                                onChange={() => handleToggleImputed(entry.id)}
+                                className="h-4 w-4 rounded border-[#C1C7D0] text-[#0052CC] focus:ring-[#0052CC]"
+                                aria-label={`Marcar ${entry.cardTitle} como imputada`}
+                              />
+                            </label>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <h4 className="min-w-0 flex-1 pr-2 text-[15px] font-semibold leading-tight text-[#172B4D] break-words" title={entry.cardTitle}>
+                                  {entry.cardTitle}
+                                </h4>
+                                <span className="text-lg font-bold text-[#0052CC] whitespace-nowrap">{entry.hours}h</span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.cardUrl ? 'bg-[#DEEBFF] text-[#0747A6]' : 'bg-[#FFFAE6] text-[#974F0C]'}`}>
+                                  {entry.cardUrl ? 'Trello' : 'Provisional'}
+                                </span>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.imputed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FFEBE6] text-[#BF2600]'}`}>
+                                  {entry.imputed ? 'Imputada' : 'Sin imputar'}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                                <span className="text-xs text-[#5E6C84] flex items-center gap-1">
+                                  <CalendarIcon className="w-3 h-3" />
+                                  {entry.date}
+                                </span>
+                                {entry.cardUrl ? (
+                                  <a 
+                                    href={entry.cardUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-[#0052CC] hover:underline flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    Ver en Trello
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <span className="text-lg font-bold text-[#0052CC]">{entry.hours}h</span>
+                          <div className="ml-7 flex items-center justify-end gap-1 sm:gap-2">
+                              <button
+                                onClick={() => openCommentsEditor(entry.taskId, entry.cardTitle)}
+                                className="rounded-lg p-2 text-[#5E6C84] transition-all hover:bg-[#EBECF0]"
+                                aria-label={`Comentarios ${entry.cardTitle}`}
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => openTaskEditor(entry)}
+                                className="rounded-lg p-2 text-[#5E6C84] transition-all hover:bg-[#EBECF0]"
+                                aria-label={`Editar ${entry.cardTitle}`}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteEntry(entry.id)}
+                                className="rounded-lg p-2 text-[#EB5A46] transition-all hover:bg-[#FFEBE6]"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                           </div>
-                          <button
-                            onClick={() => openCommentsEditor(entry.taskId, entry.cardTitle)}
-                            className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                            aria-label={`Comentarios ${entry.cardTitle}`}
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => openTaskEditor(entry)}
-                            className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                            aria-label={`Editar ${entry.cardTitle}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteEntry(entry.id)}
-                            className="p-2 text-[#EB5A46] hover:bg-[#FFEBE6] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </motion.div>
                     ))
@@ -1181,17 +1217,17 @@ export default function App() {
                     <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Horas registro</label>
+                      <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Horas registro</label>
                     <input
                       type="number"
-                      step="0.25"
-                      min="0.25"
+                      step={roundingStep}
+                      min={roundingStep}
                       required
                       value={editingHours}
                       onChange={(e) => setEditingHours(e.target.value)}
                       className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro. Redondeo 0.25 arriba.</p>
+                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
                     <button
