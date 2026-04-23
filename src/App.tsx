@@ -47,7 +47,7 @@ const extractTitleFromUrl = (url: string) => {
     }
 
     const decodedSlug = decodeURIComponent(slug);
-    const normalizedSlug = decodedSlug.replace(/^[^-]+-/, '').replace(/-/g, ' ').trim();
+    const normalizedSlug = decodedSlug.replace(/-/g, ' ').trim();
 
     return normalizedSlug ? toTitleCase(normalizedSlug) : FALLBACK_CARD_TITLE;
   } catch {
