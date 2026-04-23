@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Clock, 
   Plus, 
@@ -16,7 +16,9 @@ import {
   Trash2,
   Calendar as CalendarIcon,
   Timer,
-  Pencil
+  Pencil,
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TimeEntry, ActiveTimer } from './types';
@@ -92,12 +94,17 @@ const normalizeEntries = (savedEntries: TimeEntry[]) =>
     const cardTitle = cardUrl ? extractTitleFromUrl(cardUrl) : normalizeTaskTitle(entry.cardTitle);
     const taskKey = buildTaskKey(cardUrl, cardTitle);
     const sharedTaskId = acc.find(savedEntry => buildTaskKey(savedEntry.cardUrl, savedEntry.cardTitle) === taskKey)?.taskId;
+    const sharedComments = acc.find(savedEntry => (sharedTaskId || entry.taskId) === savedEntry.taskId)?.comments ?? [];
+    const ownComments = Array.isArray(entry.comments)
+      ? entry.comments.filter(comment => typeof comment === 'string').map(comment => comment.trim()).filter(Boolean)
+      : [];
 
     acc.push({
       ...entry,
       taskId: sharedTaskId || entry.taskId || buildLegacyTaskId(entry),
       cardUrl,
       cardTitle,
+      comments: ownComments.length > 0 ? ownComments : sharedComments,
       imputed: Boolean(entry.imputed),
     });
 
@@ -147,6 +154,11 @@ export default function App() {
   const [editingUrlValue, setEditingUrlValue] = useState('');
   const [editingNameValue, setEditingNameValue] = useState('');
   const [editingHours, setEditingHours] = useState('');
+  const [commentTaskId, setCommentTaskId] = useState<string | null>(null);
+  const [commentTaskTitle, setCommentTaskTitle] = useState('');
+  const [commentDrafts, setCommentDrafts] = useState<string[]>([]);
+  const commentInputRefs = useRef<Array<HTMLTextAreaElement | null>>([]);
+  const pendingCommentFocusIndex = useRef<number | null>(null);
 
   // Persistence
   useEffect(() => {
@@ -178,6 +190,14 @@ export default function App() {
       buildTaskKey(entry.cardUrl, entry.cardTitle) === taskKey
     ))?.taskId;
   };
+
+  const getTaskComments = (taskId?: string | null) =>
+    taskId
+      ? entries.find(entry => entry.taskId === taskId)?.comments ?? []
+      : [];
+
+  const normalizeComments = (comments: string[]) =>
+    comments.map(comment => comment.trim()).filter(Boolean);
 
   const handleStartTimer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,6 +233,7 @@ export default function App() {
       taskId: activeTimer.taskId,
       cardUrl: activeTimer.cardUrl,
       cardTitle: activeTimer.cardTitle,
+      comments: getTaskComments(activeTimer.taskId),
       date: new Date().toISOString().split('T')[0],
       hours: Math.max(0.5, roundedHours), // Minimum 0.5 if started
       imputed: false,
@@ -236,12 +257,14 @@ export default function App() {
     const cardUrl = mode === 'url' ? taskValue : null;
     const cardTitle = mode === 'url' ? extractTitleFromUrl(taskValue) : normalizeTaskTitle(taskValue);
     const taskId = findTaskId(cardUrl, cardTitle) || crypto.randomUUID();
+    const comments = getTaskComments(taskId);
 
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
       taskId,
       cardUrl,
       cardTitle,
+      comments,
       date: new Date().toISOString().split('T')[0],
       hours: roundedHours,
       imputed: false,
@@ -277,6 +300,9 @@ export default function App() {
       : normalizeTaskTitle(trimmedValue);
     const nextTaskId = findTaskId(nextCardUrl, nextCardTitle, editingTaskId) || editingTaskId;
     const roundedHours = roundToHalf(hoursInput);
+    const nextComments = nextTaskId === editingTaskId
+      ? getTaskComments(editingTaskId)
+      : getTaskComments(nextTaskId);
 
     setEntries(prev =>
       prev.map(entry =>
@@ -287,6 +313,7 @@ export default function App() {
                 taskId: nextTaskId,
                 cardUrl: nextCardUrl,
                 cardTitle: nextCardTitle,
+                comments: nextComments,
               } : {}),
               ...(entry.id === editingEntryId ? {
                 hours: roundedHours,
@@ -316,6 +343,60 @@ export default function App() {
     );
   };
 
+  const openCommentsEditor = (taskId: string, title: string) => {
+    setCommentTaskId(taskId);
+    setCommentTaskTitle(title);
+    setCommentDrafts(getTaskComments(taskId));
+  };
+
+  const closeCommentsEditor = () => {
+    setCommentTaskId(null);
+    setCommentTaskTitle('');
+    setCommentDrafts([]);
+  };
+
+  const handleCommentDraftChange = (index: number, value: string) => {
+    setCommentDrafts(prev => prev.map((comment, commentIndex) => commentIndex === index ? value : comment));
+  };
+
+  const handleAddCommentDraft = () => {
+    setCommentDrafts(prev => {
+      pendingCommentFocusIndex.current = prev.length;
+      return [...prev, ''];
+    });
+  };
+
+  const handleDeleteCommentDraft = (index: number) => {
+    setCommentDrafts(prev => prev.filter((_, commentIndex) => commentIndex !== index));
+  };
+
+  const handleSaveComments = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!commentTaskId) return;
+
+    const nextComments = normalizeComments(commentDrafts);
+
+    setEntries(prev =>
+      prev.map(entry =>
+        entry.taskId === commentTaskId
+          ? { ...entry, comments: nextComments }
+          : entry
+      )
+    );
+
+    closeCommentsEditor();
+  };
+
+  useEffect(() => {
+    if (pendingCommentFocusIndex.current === null) return;
+
+    const nextInput = commentInputRefs.current[pendingCommentFocusIndex.current];
+    if (nextInput) {
+      nextInput.focus();
+      pendingCommentFocusIndex.current = null;
+    }
+  }, [commentDrafts]);
+
   // Summaries
   const dailySummary = useMemo(() => {
     const summary: Record<
@@ -324,8 +405,8 @@ export default function App() {
         total: number;
         imputedTotal: number;
         pendingTotal: number;
-        imputedCards: Record<string, { title: string; hours: number; url: string | null }>;
-        pendingCards: Record<string, { title: string; hours: number; url: string | null }>;
+        imputedCards: Record<string, { taskId: string; title: string; hours: number; url: string | null; comments: string[] }>;
+        pendingCards: Record<string, { taskId: string; title: string; hours: number; url: string | null; comments: string[] }>;
       }
     > = {};
 
@@ -346,13 +427,13 @@ export default function App() {
       if (e.imputed) {
         daySummary.imputedTotal += e.hours;
         if (!daySummary.imputedCards[e.taskId]) {
-          daySummary.imputedCards[e.taskId] = { title: e.cardTitle, hours: 0, url: e.cardUrl ?? null };
+          daySummary.imputedCards[e.taskId] = { taskId: e.taskId, title: e.cardTitle, hours: 0, url: e.cardUrl ?? null, comments: e.comments ?? [] };
         }
         daySummary.imputedCards[e.taskId].hours += e.hours;
       } else {
         daySummary.pendingTotal += e.hours;
         if (!daySummary.pendingCards[e.taskId]) {
-          daySummary.pendingCards[e.taskId] = { title: e.cardTitle, hours: 0, url: e.cardUrl ?? null };
+          daySummary.pendingCards[e.taskId] = { taskId: e.taskId, title: e.cardTitle, hours: 0, url: e.cardUrl ?? null, comments: e.comments ?? [] };
         }
         daySummary.pendingCards[e.taskId].hours += e.hours;
       }
@@ -730,6 +811,13 @@ export default function App() {
                           <div className="text-right">
                             <span className="text-lg font-bold text-[#0052CC]">{entry.hours}h</span>
                           </div>
+                          <button
+                            onClick={() => openCommentsEditor(entry.taskId, entry.cardTitle)}
+                            className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            aria-label={`Comentarios ${entry.cardTitle}`}
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => openTaskEditor(entry)}
                             className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg opacity-0 group-hover:opacity-100 transition-all"
@@ -844,14 +932,23 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {day.imputedCards.map((card) => (
-                            <div key={`imputed-${day.date}-${card.url || card.title}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`imputed-${day.date}-${card.taskId}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                {card.url ? (
-                                  <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
-                                    Ver enlace
-                                  </a>
-                                ) : null}
+                                <div className="flex items-center gap-3 mt-1">
+                                  {card.url ? (
+                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                      Ver enlace
+                                    </a>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => openCommentsEditor(card.taskId, card.title)}
+                                    className="text-[11px] text-[#006644] hover:underline"
+                                  >
+                                    Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
+                                  </button>
+                                </div>
                               </div>
                               <span className="text-xs font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
                             </div>
@@ -871,14 +968,23 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {day.pendingCards.map((card) => (
-                            <div key={`pending-${day.date}-${card.url || card.title}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`pending-${day.date}-${card.taskId}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
-                                {card.url ? (
-                                  <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
-                                    Ver enlace
-                                  </a>
-                                ) : null}
+                                <div className="flex items-center gap-3 mt-1">
+                                  {card.url ? (
+                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                      Ver enlace
+                                    </a>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => openCommentsEditor(card.taskId, card.title)}
+                                    className="text-[11px] text-[#BF2600] hover:underline"
+                                  >
+                                    Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
+                                  </button>
+                                </div>
                               </div>
                               <span className="text-xs font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
                             </div>
@@ -893,6 +999,93 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <AnimatePresence>
+        {commentTaskId ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-[#DFE1E6] flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold text-[#172B4D]">Comentarios tarea</h3>
+                  <p className="text-sm text-[#5E6C84] truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCommentsEditor}
+                  className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg"
+                  aria-label="Cerrar comentarios"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveComments} className="p-6 space-y-4">
+                <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+                  {commentDrafts.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-[#DFE1E6] bg-[#FAFBFC] px-4 py-6 text-sm text-[#5E6C84] text-center">
+                      Sin comentarios. Añade uno.
+                    </div>
+                  ) : (
+                    commentDrafts.map((comment, index) => (
+                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-[#DFE1E6] bg-[#FAFBFC] p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold uppercase tracking-wide text-[#5E6C84]">Comentario {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCommentDraft(index)}
+                            className="text-xs font-bold text-[#EB5A46] hover:underline"
+                          >
+                            Borrar
+                          </button>
+                        </div>
+                        <textarea
+                          ref={element => {
+                            commentInputRefs.current[index] = element;
+                          }}
+                          value={comment}
+                          onChange={(e) => handleCommentDraftChange(index, e.target.value)}
+                          rows={3}
+                          placeholder="Escribe comentario"
+                          className="w-full px-3 py-2 bg-white border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddCommentDraft}
+                  className="w-full py-2 border-2 border-dashed border-[#DFE1E6] text-[#5E6C84] hover:border-[#0052CC] hover:text-[#0052CC] rounded-lg text-sm font-medium transition-all"
+                >
+                  Añadir comentario
+                </button>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-[#0052CC] text-white rounded-md font-bold hover:bg-[#0747A6] transition-colors"
+                  >
+                    Guardar comentarios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeCommentsEditor}
+                    className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {editingTaskId ? (

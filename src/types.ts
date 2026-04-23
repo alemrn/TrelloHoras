@@ -3,6 +3,7 @@ export interface TimeEntry {
   taskId: string;
   cardUrl?: string | null;
   cardTitle: string;
+  comments?: string[];
   date: string; // ISO date string (YYYY-MM-DD)
   hours: number;
   imputed: boolean;
