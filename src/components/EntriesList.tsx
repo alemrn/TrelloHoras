@@ -18,10 +18,10 @@ export default function EntriesList({ entries, openCommentsEditor, openTaskEdito
     <div className="lg:col-span-2 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold flex items-center gap-2">
-          <History className="w-5 h-5 text-[var(--brand-primary)]" />
+          <History className="w-5 h-5 text-(--brand-primary)" />
           Historial Reciente
         </h2>
-        <span className="text-xs font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full">
+        <span className="text-xs font-medium bg-(--border-default) text-(--text-primary) px-2 py-1 rounded-full">
           {entries.length} registros
         </span>
       </div>
@@ -32,13 +32,13 @@ export default function EntriesList({ entries, openCommentsEditor, openTaskEdito
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-12 text-center"
+              className="bg-(--bg-surface) rounded-xl border border-(--border-default) p-12 text-center"
             >
-              <div className="bg-[var(--bg-surface-muted)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-8 h-8 text-[var(--text-muted)]" />
+              <div className="bg-(--bg-surface-muted) w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-8 h-8 text-(--text-muted)" />
               </div>
-              <h3 className="text-[var(--text-primary)] font-bold">No hay registros aún</h3>
-              <p className="text-[var(--text-muted)] text-sm mt-1">Empieza a trackear tu tiempo en Trello.</p>
+              <h3 className="text-(--text-primary) font-bold">No hay registros aún</h3>
+              <p className="text-(--text-muted) text-sm mt-1">Empieza a trackear tu tiempo en Trello.</p>
             </motion.div>
           ) : (
             entries.map((entry, idx) => (

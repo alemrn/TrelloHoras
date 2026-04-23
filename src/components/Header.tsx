@@ -31,14 +31,14 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
   };
 
   return (
-    <header className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] sticky top-0 z-10 transition-colors">
+    <header className="bg-(--bg-surface) border-b border-(--border-default) sticky top-0 z-10 transition-colors">
       <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2">
-            <div className="bg-[var(--brand-primary)] p-1.5 rounded-md transition-colors">
-              <Clock className="w-5 h-5 text-[var(--text-inverse)]" />
+            <div className="bg-(--brand-primary) p-1.5 rounded-md transition-colors">
+              <Clock className="w-5 h-5 text-(--text-inverse)" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-[var(--brand-primary)]">TrelloTime</h1>
+            <h1 className="text-xl font-bold tracking-tight text-(--brand-primary)">TrelloTime</h1>
           </div>
           <IconButton
             type="button"
@@ -52,17 +52,17 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
         </div>
 
         <div className="flex items-center gap-2">
-          <nav className="flex gap-1 bg-[var(--bg-surface-muted)] p-1 rounded-lg transition-colors">
+          <nav className="flex gap-1 bg-(--bg-surface-muted) p-1 rounded-lg transition-colors">
             <button
               onClick={() => handleSetView('tracker')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-(--bg-surface) shadow-sm text-(--brand-primary)' : 'text-(--text-muted) hover:bg-(--border-default)'}`}
             >
               <Layout className="w-4 h-4" />
               Tracker
             </button>
             <button
               onClick={() => handleSetView('summary')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-(--bg-surface) shadow-sm text-(--brand-primary)' : 'text-(--text-muted) hover:bg-(--border-default)'}`}
             >
               <BarChart3 className="w-4 h-4" />
               Resumen

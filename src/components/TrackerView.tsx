@@ -84,24 +84,24 @@ export default function TrackerView(props: Props) {
         {/* Timer Modal */}
         <AnimatePresence>
           {isTimerModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-(--overlay) backdrop-blur-sm">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+                className="bg-(--bg-surface) rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
               >
                 <div className="p-6">
-                  <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Nueva Tarea</h3>
+                  <h3 className="text-lg font-bold text-(--text-primary) mb-4">Nueva Tarea</h3>
                   <form onSubmit={handleStartTimer} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--bg-surface-muted) p-1">
                       <button
                         type="button"
                         onClick={() => {
                           setTimerInputMode('url');
                           setTempTaskValue('');
                         }}
-                        className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                        className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                       >
                         URL Trello
                       </button>
@@ -111,13 +111,13 @@ export default function TrackerView(props: Props) {
                           setTimerInputMode('name');
                           setTempTaskValue('');
                         }}
-                        className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                        className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                       >
                         Tarea provisional
                       </button>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
+                      <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">
                         {timerInputMode === 'url' ? 'Enlace de la tarjeta de Trello' : 'Nombre de la tarea'}
                       </label>
                       <input
@@ -126,23 +126,23 @@ export default function TrackerView(props: Props) {
                         value={tempTaskValue}
                         onChange={(e) => setTempTaskValue(e.target.value)}
                         placeholder={timerInputMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Refinar propuesta cliente'}
-                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
+                        className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">Comentario</label>
+                      <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">Comentario</label>
                       <textarea
                         value={tempTimerComment}
                         onChange={(e) => setTempTimerComment(e.target.value)}
                         rows={3}
                         placeholder="Ej: Llamada cliente, dudas scope"
-                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
+                        className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none resize-y"
                       />
                     </div>
                     <div className="flex gap-3 pt-2">
                       <button
                         type="submit"
-                        className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
+                        className="flex-1 py-2.5 bg-(--brand-primary) text-(--text-inverse) rounded-md font-bold hover:bg-(--brand-primary-over)] transition-colors"
                       >
                         Iniciar Cronómetro
                       </button>
@@ -154,7 +154,7 @@ export default function TrackerView(props: Props) {
                           setTempTimerComment('');
                           setTimerInputMode('url');
                         }}
-                        className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
+                        className="px-4 py-2.5 bg-(--bg-surface-uted)] text-(--text-primary) rounded-md font-bold hover:bg-(--border-default) transition-colors"
                       >
                         Cancelar
                       </button>
@@ -167,9 +167,9 @@ export default function TrackerView(props: Props) {
         </AnimatePresence>
 
         {/* Manual Add Card */}
-        <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-6 shadow-sm">
+        <div className="bg-(--bg-surface) rounded-xl border border-(--border-default) p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-(--text-muted) uppercase tracking-wider flex items-center gap-2">
               <Plus className="w-4 h-4" />
               Añadir Manual
             </h2>
@@ -181,7 +181,7 @@ export default function TrackerView(props: Props) {
             </Button>
           ) : (
             <form onSubmit={handleManualAdd} className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--bg-surface-uted)] p-1">
                 <label className="cursor-pointer rounded-md h-full">
                   <input
                     type="radio"
@@ -191,7 +191,7 @@ export default function TrackerView(props: Props) {
                     onChange={() => setManualInputMode('url')}
                     className="sr-only peer"
                   />
-                  <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
+                  <span className="flex min-h-18 items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-(--text-muted) transition-colors peer-checked:bg-(--bg-surface) peer-checked:text-(--brand-primary) peer-checked:shadow-sm">
                     URL Trello
                   </span>
                 </label>
@@ -204,30 +204,30 @@ export default function TrackerView(props: Props) {
                     onChange={() => setManualInputMode('name')}
                     className="sr-only peer"
                   />
-                  <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
+                  <span className="flex min-h-18 items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-(--text-muted) transition-colors peer-checked:bg-(--bg-surface) peer-checked:text-(--brand-primary) peer-checked:shadow-sm">
                     Tarea provisional
                   </span>
                 </label>
               </div>
               {manualInputMode === 'url' ? (
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">URL DE TRELLO</label>
-                  <input name="url" placeholder="https://trello.com/c/..." className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none" />
+                  <label className="block text-xs font-bold text-(--text-muted) mb-1">URL DE TRELLO</label>
+                  <input name="url" placeholder="https://trello.com/c/..." className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none" />
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">NOMBRE TAREA PROVISIONAL</label>
-                  <input name="title" placeholder="Ej: Revisión backlog sprint" className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none" />
+                  <label className="block text-xs font-bold text-(--text-muted) mb-1">NOMBRE TAREA PROVISIONAL</label>
+                  <input name="title" placeholder="Ej: Revisión backlog sprint" className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none" />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">HORAS</label>
-                <input name="hours" type="number" step={0.25} min={0.25} required placeholder="Ej: 1.5" className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none" />
-                <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Redondeo al múltiplo superior 0.25.</p>
+                <label className="block text-xs font-bold text-(--text-muted) mb-1">HORAS</label>
+                <input name="hours" type="number" step={0.25} min={0.25} required placeholder="Ej: 1.5" className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none" />
+                <p className="text-[10px] text-(--text-muted) mt-1 italic">* Redondeo al múltiplo superior 0.25.</p>
               </div>
               <div>
-                <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">COMENTARIO</label>
-                <textarea name="comment" rows={3} placeholder="Ej: Reunión, cambios copy, bug login" className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y" />
+                <label className="block text-xs font-bold text-(--text-muted) mb-1">COMENTARIO</label>
+                <textarea name="comment" rows={3} placeholder="Ej: Reunión, cambios copy, bug login" className="w-full px-3 py-2 bg-(--bg-surface-oft)] border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none resize-y" />
               </div>
               <div className="flex gap-2">
                 <Button type="submit" className="flex-1 py-2 text-sm">Guardar</Button>

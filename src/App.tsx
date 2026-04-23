@@ -512,7 +512,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans transition-colors">
+    <div className="min-h-screen bg-(--bg-app) text-(--text-primary) font-sans transition-colors">
       {/* Header */}
       <Header
         initialView={view}
@@ -562,22 +562,22 @@ export default function App() {
 
       <AnimatePresence>
         {commentTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-(--overlay) backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
+              className="bg-(--bg-surface) rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-[var(--border-default)] flex items-start justify-between gap-4">
+              <div className="p-6 border-b border-(--border-default) flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-[var(--text-primary)]">Comentarios tarea</h3>
-                  <p className="text-sm text-[var(--text-muted)] truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
+                  <h3 className="text-lg font-bold text-(--text-primary)">Comentarios tarea</h3>
+                  <p className="text-sm text-(--text-muted) truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
                 </div>
                 <button
                   type="button"
                   onClick={closeCommentsEditor}
-                  className="p-2 text-[var(--text-muted)] hover:bg-[var(--bg-surface-muted)] rounded-lg"
+                  className="p-2 text-(--text-muted) hover:bg-(--bg-surface-muted) rounded-lg"
                   aria-label="Cerrar comentarios"
                 >
                   <X className="w-4 h-4" />
@@ -587,18 +587,18 @@ export default function App() {
               <form onSubmit={handleSaveComments} className="p-6 space-y-4">
                 <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
                   {commentDrafts.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-soft)] px-4 py-6 text-sm text-[var(--text-muted)] text-center">
+                    <div className="rounded-lg border border-dashed border-(--border-default) bg-(--bg-surface-soft) px-4 py-6 text-sm text-(--text-muted) text-center">
                       Sin comentarios. Añade uno.
                     </div>
                   ) : (
                     commentDrafts.map((comment, index) => (
-                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-soft)] p-3 space-y-2">
+                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-(--border-default) bg-(--bg-surface-soft) p-3 space-y-2">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Comentario {index + 1}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-(--text-muted)">Comentario {index + 1}</span>
                           <button
                             type="button"
                             onClick={() => handleDeleteCommentDraft(index)}
-                            className="text-xs font-bold text-[var(--danger-action)] hover:underline"
+                            className="text-xs font-bold text-(--danger-action) hover:underline"
                           >
                             Borrar
                           </button>
@@ -611,7 +611,7 @@ export default function App() {
                           onChange={(e) => handleCommentDraftChange(index, e.target.value)}
                           rows={3}
                           placeholder="Escribe comentario"
-                          className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
+                          className="w-full px-3 py-2 bg-(--bg-surface) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none resize-y"
                         />
                       </div>
                     ))
@@ -621,7 +621,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleAddCommentDraft}
-                  className="w-full py-2 border-2 border-dashed border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] rounded-lg text-sm font-medium transition-all"
+                  className="w-full py-2 border-2 border-dashed border-(--border-default) text-(--text-muted) hover:border-(--brand-primary) hover:text-(--brand-primary) rounded-lg text-sm font-medium transition-all"
                 >
                   Añadir comentario
                 </button>
@@ -629,14 +629,14 @@ export default function App() {
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
+                    className="flex-1 py-2.5 bg-(--brand-primary) text-(--text-inverse) rounded-md font-bold hover:bg-(--brand-primary-hover) transition-colors"
                   >
                     Guardar comentarios
                   </button>
                   <button
                     type="button"
                     onClick={closeCommentsEditor}
-                    className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
+                    className="px-4 py-2.5 bg-(--bg-surface-muted) text-(--text-primary) rounded-md font-bold hover:bg-(--border-default) transition-colors"
                   >
                     Cancelar
                   </button>
@@ -649,34 +649,34 @@ export default function App() {
 
       <AnimatePresence>
         {editingTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-(--overlay) backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-(--bg-surface) rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-6">
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Editar tarea</h3>
+                <h3 className="text-lg font-bold text-(--text-primary) mb-4">Editar tarea</h3>
                 <form onSubmit={handleSaveTaskEdit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--bg-surface-muted) p-1">
                     <button
                       type="button"
                       onClick={() => setEditingMode('url')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                     >
                       URL Trello
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingMode('name')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-[var(--bg-surface)] text-[var,--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                     >
                       Tarea provisional
                     </button>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
+                    <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">
                       {editingMode === 'url' ? 'Nueva URL Trello' : 'Nombre tarea'}
                     </label>
                     <input
@@ -687,12 +687,12 @@ export default function App() {
                         ? setEditingUrlValue(e.target.value)
                         : setEditingNameValue(e.target.value)}
                       placeholder={editingMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Revisión backlog sprint'}
-                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-(--bg-surface-soft) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
+                    <p className="text-[10px] text-(--text-muted) mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
                   </div>
                   <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">Horas registro</label>
+                      <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">Horas registro</label>
                     <input
                       type="number"
                       step={0.25}
@@ -700,9 +700,9 @@ export default function App() {
                       required
                       value={editingHours}
                       onChange={(e) => setEditingHours(e.target.value)}
-                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-(--bg-surface-soft) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
+                    <p className="text-[10px] text-(--text-muted) mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button type="submit" className="flex-1 py-2 text-sm">Guardar</Button>
