@@ -18,13 +18,16 @@ import {
   Timer,
   Pencil,
   MessageSquare,
-  X
+  X,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TimeEntry, ActiveTimer } from './types';
 
 const STORAGE_KEY = 'trello-time-entries';
 const ROUNDING_MODE_KEY = 'trello-time-rounding-mode';
+const THEME_MODE_KEY = 'trello-time-theme-mode';
 const FALLBACK_CARD_TITLE = 'Trello Card';
 const FALLBACK_TASK_TITLE = 'Tarea sin nombre';
 
@@ -144,6 +147,15 @@ export default function App() {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [view, setView] = useState<'tracker' | 'summary'>('tracker');
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem(THEME_MODE_KEY);
+
+    if (savedTheme) {
+      return savedTheme === 'dark';
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [isRoundModeEnabled, setIsRoundModeEnabled] = useState(() => {
     const savedMode = localStorage.getItem(ROUNDING_MODE_KEY);
     return savedMode ? savedMode === 'true' : true;
@@ -174,6 +186,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(ROUNDING_MODE_KEY, String(isRoundModeEnabled));
   }, [isRoundModeEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_MODE_KEY, isDarkMode ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
 
   // Timer logic
   useEffect(() => {
@@ -526,33 +543,46 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] text-[#172B4D] font-sans">
+    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans transition-colors">
       {/* Header */}
-      <header className="bg-white border-b border-[#DFE1E6] sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="bg-[#0052CC] p-1.5 rounded-md">
-              <Clock className="w-5 h-5 text-white" />
+      <header className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] sticky top-0 z-10 transition-colors">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="bg-[var(--brand-primary)] p-1.5 rounded-md transition-colors">
+                <Clock className="w-5 h-5 text-[var(--text-inverse)]" />
+              </div>
+              <h1 className="text-xl font-bold tracking-tight text-[var(--brand-primary)]">TrelloTime</h1>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-[#0052CC]">TrelloTime</h1>
+            <button
+              type="button"
+              onClick={() => setIsDarkMode(prev => !prev)}
+              className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-muted)] px-3 text-sm font-medium text-[var(--text-muted)] transition-all hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
+              aria-pressed={isDarkMode}
+              aria-label={`Modo oscuro ${isDarkMode ? 'activado' : 'desactivado'}`}
+            >
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isDarkMode ? 'Claro' : 'Oscuro'}</span>
+            </button>
           </div>
-
-          <nav className="flex gap-1 bg-[#EBECF0] p-1 rounded-lg">
+          <div className="flex items-center gap-2">
+            <nav className="flex gap-1 bg-[var(--bg-surface-muted)] p-1 rounded-lg transition-colors">
               <button 
                 onClick={() => setView('tracker')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
               >
                 <Layout className="w-4 h-4" />
                 Tracker
               </button>
               <button 
                 onClick={() => setView('summary')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-white shadow-sm text-[#0052CC]' : 'text-[#5E6C84] hover:bg-[#DFE1E6]'}`}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
               >
                 <BarChart3 className="w-4 h-4" />
                 Resumen
               </button>
             </nav>
+          </div>
         </div>
       </header>
 
@@ -562,10 +592,10 @@ export default function App() {
             {/* Left Column: Controls */}
             <div className="lg:col-span-1 space-y-6">
               {/* Active Timer Card */}
-              <div className="bg-white rounded-xl border border-[#DFE1E6] p-6 shadow-sm">
+              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-6 shadow-sm">
                 <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <div className="flex flex-1 items-center justify-between gap-3 min-w-0">
-                    <h2 className="text-sm font-semibold text-[#5E6C84] uppercase tracking-wider flex items-center gap-2">
+                  <div className="flex min-w-max flex-1 items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
                       <Timer className="w-4 h-4" />
                       Cronómetro
                     </h2>
@@ -577,13 +607,13 @@ export default function App() {
                       aria-label={`Modo Amaia ${isRoundModeEnabled ? 'activado' : 'desactivado'}`}
                     >
                       <span
-                        className={`relative h-6 w-10 rounded-full transition-colors ${isRoundModeEnabled ? 'bg-[#0052CC]' : 'bg-[#C1C7D0]'}`}
+                        className={`relative h-6 w-10 rounded-full transition-colors ${isRoundModeEnabled ? 'bg-[var(--brand-primary)]' : 'bg-[var(--border-strong)]'}`}
                       >
                         <span
-                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-all ${isRoundModeEnabled ? 'left-5' : 'left-1'}`}
+                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--bg-surface)] shadow-sm transition-all ${isRoundModeEnabled ? 'left-5' : 'left-1'}`}
                         />
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-[#5E6C84]">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
                         {isRoundModeEnabled ? '0.25' : '0.5'}
                       </span>
                     </button>
@@ -591,7 +621,7 @@ export default function App() {
                   {!activeTimer ? (
                     <button 
                       onClick={() => setIsTimerModalOpen(true)}
-                      className="px-4 py-2 bg-[#0052CC] hover:bg-[#0747A6] text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm whitespace-nowrap max-[480px]:w-full"
+                      className="min-w-[11rem] flex-1 px-4 py-2 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-[var(--text-inverse)] rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                     >
                       <Play className="w-4 h-4 fill-current" />
                       Iniciar tarea
@@ -602,16 +632,16 @@ export default function App() {
                 {activeTimer ? (
                   <div className="space-y-4">
                     <div className="text-center">
-                      <div className="text-4xl font-mono font-bold text-[#172B4D] mb-1">
+                      <div className="text-4xl font-mono font-bold text-[var(--text-primary)] mb-1">
                         {formatTime(elapsedSeconds)}
                       </div>
-                      <p className="text-sm text-[#5E6C84] truncate px-2" title={activeTimer.cardTitle}>
+                      <p className="text-sm text-[var(--text-muted)] truncate px-2" title={activeTimer.cardTitle}>
                         {activeTimer.cardTitle}
                       </p>
                     </div>
                     <button 
                       onClick={handleStopTimer}
-                      className="w-full py-3 bg-[#EB5A46] hover:bg-[#CF513D] text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
+                      className="w-full py-3 bg-[var(--danger-action)] hover:bg-[var(--danger-action-hover)] text-[var(--text-inverse)] rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
                     >
                       <Square className="w-4 h-4 fill-current" />
                       Detener y Guardar
@@ -623,24 +653,24 @@ export default function App() {
               {/* Timer Modal */}
               <AnimatePresence>
                 {isTimerModalOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+                      className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
                     >
                       <div className="p-6">
-                        <h3 className="text-lg font-bold text-[#172B4D] mb-4">Nueva Tarea</h3>
+                        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Nueva Tarea</h3>
                         <form onSubmit={handleStartTimer} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
                             <button
                               type="button"
                               onClick={() => {
                                 setTimerInputMode('url');
                                 setTempTaskValue('');
                               }}
-                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
                             >
                               URL Trello
                             </button>
@@ -650,13 +680,13 @@ export default function App() {
                                 setTimerInputMode('name');
                                 setTempTaskValue('');
                               }}
-                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
                             >
                               Tarea provisional
                             </button>
                           </div>
                           <div>
-                            <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                            <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
                               {timerInputMode === 'url' ? 'Enlace de la tarjeta de Trello' : 'Nombre de la tarea'}
                             </label>
                             <input 
@@ -665,11 +695,11 @@ export default function App() {
                               value={tempTaskValue}
                               onChange={(e) => setTempTaskValue(e.target.value)}
                               placeholder={timerInputMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Refinar propuesta cliente'}
-                              className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                              className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                            <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
                               Comentario
                             </label>
                             <textarea
@@ -677,13 +707,13 @@ export default function App() {
                               onChange={(e) => setTempTimerComment(e.target.value)}
                               rows={3}
                               placeholder="Ej: Llamada cliente, dudas scope"
-                              className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                              className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
                             />
                           </div>
                           <div className="flex gap-3 pt-2">
                             <button 
                               type="submit"
-                              className="flex-1 py-2.5 bg-[#0052CC] text-white rounded-md font-bold hover:bg-[#0747A6] transition-colors"
+                              className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
                             >
                               Iniciar Cronómetro
                             </button>
@@ -695,7 +725,7 @@ export default function App() {
                                 setTempTimerComment('');
                                 setTimerInputMode('url');
                               }}
-                              className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
+                              className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
                             >
                               Cancelar
                             </button>
@@ -708,9 +738,9 @@ export default function App() {
               </AnimatePresence>
 
               {/* Manual Add Card */}
-              <div className="bg-white rounded-xl border border-[#DFE1E6] p-6 shadow-sm">
+              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-semibold text-[#5E6C84] uppercase tracking-wider flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
                     <Plus className="w-4 h-4" />
                     Añadir Manual
                   </h2>
@@ -719,13 +749,13 @@ export default function App() {
                 {!isAddingManual ? (
                   <button 
                     onClick={() => setIsAddingManual(true)}
-                    className="w-full py-2 border-2 border-dashed border-[#DFE1E6] text-[#5E6C84] hover:border-[#0052CC] hover:text-[#0052CC] rounded-lg text-sm font-medium transition-all"
+                    className="w-full py-2 border-2 border-dashed border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] rounded-lg text-sm font-medium transition-all"
                   >
                     Registrar horas manualmente
                   </button>
                 ) : (
                   <form onSubmit={handleManualAdd} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
                       <label className="cursor-pointer rounded-md h-full">
                         <input
                           type="radio"
@@ -735,7 +765,7 @@ export default function App() {
                           onChange={() => setManualInputMode('url')}
                           className="sr-only peer"
                         />
-                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
                           URL Trello
                         </span>
                       </label>
@@ -748,32 +778,32 @@ export default function App() {
                           onChange={() => setManualInputMode('name')}
                           className="sr-only peer"
                         />
-                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
                           Tarea provisional
                         </span>
                       </label>
                     </div>
                     {manualInputMode === 'url' ? (
                       <div>
-                        <label className="block text-xs font-bold text-[#5E6C84] mb-1">URL DE TRELLO</label>
+                        <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">URL DE TRELLO</label>
                         <input 
                           name="url"
                           placeholder="https://trello.com/c/..."
-                          className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                          className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                         />
                       </div>
                     ) : (
                       <div>
-                        <label className="block text-xs font-bold text-[#5E6C84] mb-1">NOMBRE TAREA PROVISIONAL</label>
+                        <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">NOMBRE TAREA PROVISIONAL</label>
                         <input 
                           name="title"
                           placeholder="Ej: Revisión backlog sprint"
-                          className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                          className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                         />
                       </div>
                     )}
                     <div>
-                      <label className="block text-xs font-bold text-[#5E6C84] mb-1">HORAS</label>
+                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">HORAS</label>
                       <input 
                         name="hours"
                         type="number"
@@ -781,30 +811,30 @@ export default function App() {
                         min={roundingStep}
                         required
                         placeholder="Ej: 1.5"
-                        className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                       />
-                      <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Redondeo al múltiplo superior {roundingStep}.</p>
+                      <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Redondeo al múltiplo superior {roundingStep}.</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-[#5E6C84] mb-1">COMENTARIO</label>
+                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">COMENTARIO</label>
                       <textarea
                         name="comment"
                         rows={3}
                         placeholder="Ej: Reunión, cambios copy, bug login"
-                        className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
                       />
                     </div>
                     <div className="flex gap-2">
                       <button 
                         type="submit"
-                        className="flex-1 py-2 bg-[#0052CC] text-white rounded-md text-sm font-bold hover:bg-[#0747A6]"
+                        className="flex-1 py-2 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md text-sm font-bold hover:bg-[var(--brand-primary-hover)]"
                       >
                         Guardar
                       </button>
                       <button 
                         type="button"
                         onClick={() => setIsAddingManual(false)}
-                        className="px-4 py-2 bg-[#EBECF0] text-[#172B4D] rounded-md text-sm font-bold hover:bg-[#DFE1E6]"
+                        className="px-4 py-2 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md text-sm font-bold hover:bg-[var(--border-default)]"
                       >
                         Cancelar
                       </button>
@@ -818,10 +848,10 @@ export default function App() {
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold flex items-center gap-2">
-                  <History className="w-5 h-5 text-[#0052CC]" />
+                  <History className="w-5 h-5 text-[var(--brand-primary)]" />
                   Historial Reciente
                 </h2>
-                <span className="text-xs font-medium bg-[#DFE1E6] text-[#172B4D] px-2 py-1 rounded-full">
+                <span className="text-xs font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full">
                   {entries.length} registros
                 </span>
               </div>
@@ -832,13 +862,13 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="bg-white rounded-xl border border-[#DFE1E6] p-12 text-center"
+                      className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-12 text-center"
                     >
-                      <div className="bg-[#EBECF0] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Clock className="w-8 h-8 text-[#5E6C84]" />
+                      <div className="bg-[var(--bg-surface-muted)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Clock className="w-8 h-8 text-[var(--text-muted)]" />
                       </div>
-                      <h3 className="text-[#172B4D] font-bold">No hay registros aún</h3>
-                      <p className="text-[#5E6C84] text-sm mt-1">Empieza a trackear tu tiempo en Trello.</p>
+                      <h3 className="text-[var(--text-primary)] font-bold">No hay registros aún</h3>
+                      <p className="text-[var(--text-muted)] text-sm mt-1">Empieza a trackear tu tiempo en Trello.</p>
                     </motion.div>
                   ) : (
                     entries.map((entry) => (
@@ -847,7 +877,7 @@ export default function App() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        className="group rounded-xl border border-[#DFE1E6] bg-white p-4 shadow-sm transition-all hover:border-[#0052CC]"
+                        className="group rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm transition-all hover:border-[var(--brand-primary)]"
                       >
                         <div className="flex flex-col gap-3">
                           <div className="flex min-w-0 gap-3">
@@ -856,27 +886,27 @@ export default function App() {
                                 type="checkbox"
                                 checked={entry.imputed}
                                 onChange={() => handleToggleImputed(entry.id)}
-                                className="h-4 w-4 rounded border-[#C1C7D0] text-[#0052CC] focus:ring-[#0052CC]"
+                                className="h-4 w-4 rounded border-[var(--border-strong)] text-[var(--brand-primary)] focus:ring-[var(--brand-primary)]"
                                 aria-label={`Marcar ${entry.cardTitle} como imputada`}
                               />
                             </label>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-3">
-                                <h4 className="min-w-0 flex-1 pr-2 text-[15px] font-semibold leading-tight text-[#172B4D] break-words" title={entry.cardTitle}>
+                                <h4 className="min-w-0 flex-1 pr-2 text-[15px] font-semibold leading-tight text-[var(--text-primary)] break-words" title={entry.cardTitle}>
                                   {entry.cardTitle}
                                 </h4>
-                                <span className="text-lg font-bold text-[#0052CC] whitespace-nowrap">{entry.hours}h</span>
+                                <span className="text-lg font-bold text-[var(--brand-primary)] whitespace-nowrap">{entry.hours}h</span>
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.cardUrl ? 'bg-[#DEEBFF] text-[#0747A6]' : 'bg-[#FFFAE6] text-[#974F0C]'}`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.cardUrl ? 'bg-[var(--info-soft)] text-[var(--brand-primary-hover)]' : 'bg-[var(--warning-soft)] text-[var(--warning)]'}`}>
                                   {entry.cardUrl ? 'Trello' : 'Provisional'}
                                 </span>
-                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.imputed ? 'bg-[#E3FCEF] text-[#006644]' : 'bg-[#FFEBE6] text-[#BF2600]'}`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.imputed ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-[var(--danger-soft)] text-[var(--danger)]'}`}>
                                   {entry.imputed ? 'Imputada' : 'Sin imputar'}
                                 </span>
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                                <span className="text-xs text-[#5E6C84] flex items-center gap-1">
+                                <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
                                   <CalendarIcon className="w-3 h-3" />
                                   {entry.date}
                                 </span>
@@ -885,7 +915,7 @@ export default function App() {
                                     href={entry.cardUrl} 
                                     target="_blank" 
                                     rel="noopener noreferrer"
-                                    className="text-xs text-[#0052CC] hover:underline flex items-center gap-1"
+                                    className="text-xs text-[var(--brand-primary)] hover:underline flex items-center gap-1"
                                   >
                                     <ExternalLink className="w-3 h-3" />
                                     Ver en Trello
@@ -897,21 +927,21 @@ export default function App() {
                           <div className="ml-7 flex items-center justify-end gap-1 sm:gap-2">
                               <button
                                 onClick={() => openCommentsEditor(entry.taskId, entry.cardTitle)}
-                                className="rounded-lg p-2 text-[#5E6C84] transition-all hover:bg-[#EBECF0]"
+                                className="rounded-lg p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--bg-surface-muted)]"
                                 aria-label={`Comentarios ${entry.cardTitle}`}
                               >
                                 <MessageSquare className="w-4 h-4" />
                               </button>
                               <button 
                                 onClick={() => openTaskEditor(entry)}
-                                className="rounded-lg p-2 text-[#5E6C84] transition-all hover:bg-[#EBECF0]"
+                                className="rounded-lg p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--bg-surface-muted)]"
                                 aria-label={`Editar ${entry.cardTitle}`}
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
                               <button 
                                 onClick={() => handleDeleteEntry(entry.id)}
-                                className="rounded-lg p-2 text-[#EB5A46] transition-all hover:bg-[#FFEBE6]"
+                                className="rounded-lg p-2 text-[var(--danger-action)] transition-all hover:bg-[var(--danger-soft)]"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -927,13 +957,13 @@ export default function App() {
         ) : (
           <div className="space-y-4">
             {weeklySummary.length > 0 && (
-              <section className="bg-white rounded-lg border border-[#DFE1E6] shadow-sm overflow-hidden">
-                <div className="px-4 py-2 border-b border-[#DFE1E6] bg-[#F4F5F7] flex items-center justify-between gap-3">
+              <section className="bg-[var(--bg-surface)] rounded-lg border border-[var(--border-default)] shadow-sm overflow-hidden">
+                <div className="px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-app)] flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-bold text-[#172B4D] leading-tight">Resumen semanal</h3>
-                    <p className="text-xs text-[#5E6C84] leading-tight">Semana actual, lunes a viernes</p>
+                    <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">Resumen semanal</h3>
+                    <p className="text-xs text-[var(--text-muted)] leading-tight">Semana actual, lunes a viernes</p>
                   </div>
-                  <span className="text-[11px] font-medium bg-[#DFE1E6] text-[#172B4D] px-2 py-1 rounded-full whitespace-nowrap">
+                  <span className="text-[11px] font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full whitespace-nowrap">
                     {weeklySummary.reduce((total, day) => total + day.total, 0)}h totales
                   </span>
                 </div>
@@ -942,25 +972,25 @@ export default function App() {
                   {weeklySummary.map((day) => (
                     <article
                       key={day.date}
-                      className="min-w-0 rounded-md border border-[#DFE1E6] bg-[#FAFBFC] p-2 flex flex-col gap-1.5"
+                      className="min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface-soft)] p-2 flex flex-col gap-1.5"
                     >
-                      <div className="pb-1.5 border-b border-[#DFE1E6]">
-                        <p className="text-[13px] font-bold text-[#172B4D] leading-none truncate">{day.label}</p>
-                        <p className="text-[10px] text-[#5E6C84] mt-1 leading-none truncate">{day.date}</p>
+                      <div className="pb-1.5 border-b border-[var(--border-default)]">
+                        <p className="text-[13px] font-bold text-[var(--text-primary)] leading-none truncate">{day.label}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-none truncate">{day.date}</p>
                       </div>
 
                       <div className="space-y-1">
-                        <div className="rounded-md bg-[#DEEBFF] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#0747A6] leading-none">Total</p>
-                          <p className="text-sm font-bold text-[#0052CC] leading-none mt-1">{day.total}h</p>
+                        <div className="rounded-md bg-[var(--info-soft)] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--brand-primary-hover)] leading-none">Total</p>
+                          <p className="text-sm font-bold text-[var(--brand-primary)] leading-none mt-1">{day.total}h</p>
                         </div>
-                        <div className="rounded-md bg-[#F3FFF8] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#006644] leading-none">Imputadas</p>
-                          <p className="text-xs font-bold text-[#006644] leading-none mt-1">{day.imputedTotal}h</p>
+                        <div className="rounded-md bg-[var(--success-soft-alt)] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--success)] leading-none">Imputadas</p>
+                          <p className="text-xs font-bold text-[var(--success)] leading-none mt-1">{day.imputedTotal}h</p>
                         </div>
-                        <div className="rounded-md bg-[#FFF7F3] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[#BF2600] leading-none">Sin imputar</p>
-                          <p className="text-xs font-bold text-[#BF2600] leading-none mt-1">{day.pendingTotal}h</p>
+                        <div className="rounded-md bg-[var(--danger-soft-alt)] px-2 py-1.5">
+                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--danger)] leading-none">Sin imputar</p>
+                          <p className="text-xs font-bold text-[var(--danger)] leading-none mt-1">{day.pendingTotal}h</p>
                         </div>
                       </div>
                     </article>
@@ -971,71 +1001,71 @@ export default function App() {
 
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-[#0052CC]" />
+                <CalendarIcon className="w-5 h-5 text-[var(--brand-primary)]" />
                 Resumen por Día
               </h2>
-              <span className="text-xs font-medium bg-[#DFE1E6] text-[#172B4D] px-2 py-1 rounded-full">
+              <span className="text-xs font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full">
                 {dailySummary.length} días
               </span>
             </div>
 
             {dailySummary.length === 0 ? (
-              <div className="bg-white rounded-xl border border-[#DFE1E6] p-12 text-center shadow-sm">
-                <div className="bg-[#EBECF0] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CalendarIcon className="w-8 h-8 text-[#5E6C84]" />
+              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-12 text-center shadow-sm">
+                <div className="bg-[var(--bg-surface-muted)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CalendarIcon className="w-8 h-8 text-[var(--text-muted)]" />
                 </div>
-                <h3 className="text-[#172B4D] font-bold">Sin datos disponibles</h3>
-                <p className="text-[#5E6C84] text-sm mt-1">Añade registros para ver resumen diario.</p>
+                <h3 className="text-[var(--text-primary)] font-bold">Sin datos disponibles</h3>
+                <p className="text-[var(--text-muted)] text-sm mt-1">Añade registros para ver resumen diario.</p>
               </div>
             ) : (
               dailySummary.map((day) => (
-                <section key={day.date} className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[#DFE1E6] bg-[#F4F5F7] flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <section key={day.date} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-app)] flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h3 className="text-base font-bold text-[#172B4D] leading-tight">{day.date}</h3>
-                      <p className="text-xs text-[#5E6C84] mt-1">Total {day.total}h</p>
+                      <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">{day.date}</h3>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">Total {day.total}h</p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[#E3FCEF] text-[#006644] whitespace-nowrap">
+                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[var(--success-soft)] text-[var(--success)] whitespace-nowrap">
                         Imputadas {day.imputedTotal}h
                       </span>
-                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[#FFEBE6] text-[#BF2600] whitespace-nowrap">
+                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] whitespace-nowrap">
                         Sin imputar {day.pendingTotal}h
                       </span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2">
-                    <div className="p-4 border-b border-[#DFE1E6] lg:border-b-0 lg:border-r">
+                    <div className="p-4 border-b border-[var(--border-default)] lg:border-b-0 lg:border-r">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#006644]">Imputadas</h4>
-                        <span className="text-xs font-bold text-[#006644]">{day.imputedTotal}h</span>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--success)]">Imputadas</h4>
+                        <span className="text-xs font-bold text-[var(--success)]">{day.imputedTotal}h</span>
                       </div>
 
                       {day.imputedCards.length === 0 ? (
-                        <p className="text-xs text-[#5E6C84]">Sin tarjetas imputadas.</p>
+                        <p className="text-xs text-[var(--text-muted)]">Sin tarjetas imputadas.</p>
                       ) : (
                         <div className="space-y-2">
                           {day.imputedCards.map((card) => (
-                            <div key={`imputed-${day.date}-${card.taskId}`} className="rounded-lg border border-[#E3FCEF] bg-[#F3FFF8] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`imputed-${day.date}-${card.taskId}`} className="rounded-lg border border-[var(--success-soft)] bg-[var(--success-soft-alt)] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <div className="text-sm font-medium text-[var(--text-primary)] truncate" title={card.title}>{card.title}</div>
                                 <div className="flex items-center gap-3 mt-1">
                                   {card.url ? (
-                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--brand-primary)] hover:underline">
                                       Ver enlace
                                     </a>
                                   ) : null}
                                   <button
                                     type="button"
                                     onClick={() => openCommentsEditor(card.taskId, card.title)}
-                                    className="text-[11px] text-[#006644] hover:underline"
+                                    className="text-[11px] text-[var(--success)] hover:underline"
                                   >
                                     Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
                                   </button>
                                 </div>
                               </div>
-                              <span className="text-xs font-bold text-[#006644] flex-shrink-0">{card.hours}h</span>
+                              <span className="text-xs font-bold text-[var(--success)] flex-shrink-0">{card.hours}h</span>
                             </div>
                           ))}
                         </div>
@@ -1044,34 +1074,34 @@ export default function App() {
 
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#BF2600]">Sin imputar</h4>
-                        <span className="text-xs font-bold text-[#BF2600]">{day.pendingTotal}h</span>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--danger)]">Sin imputar</h4>
+                        <span className="text-xs font-bold text-[var(--danger)]">{day.pendingTotal}h</span>
                       </div>
 
                       {day.pendingCards.length === 0 ? (
-                        <p className="text-xs text-[#5E6C84]">Sin tarjetas pendientes.</p>
+                        <p className="text-xs text-[var(--text-muted)]">Sin tarjetas pendientes.</p>
                       ) : (
                         <div className="space-y-2">
                           {day.pendingCards.map((card) => (
-                            <div key={`pending-${day.date}-${card.taskId}`} className="rounded-lg border border-[#FFEBE6] bg-[#FFF7F3] px-3 py-2 flex items-center justify-between gap-3">
+                            <div key={`pending-${day.date}-${card.taskId}`} className="rounded-lg border border-[var(--danger-soft)] bg-[var(--danger-soft-alt)] px-3 py-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="text-sm font-medium text-[#172B4D] truncate" title={card.title}>{card.title}</div>
+                                <div className="text-sm font-medium text-[var(--text-primary)] truncate" title={card.title}>{card.title}</div>
                                 <div className="flex items-center gap-3 mt-1">
                                   {card.url ? (
-                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#0052CC] hover:underline">
+                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--brand-primary)] hover:underline">
                                       Ver enlace
                                     </a>
                                   ) : null}
                                   <button
                                     type="button"
                                     onClick={() => openCommentsEditor(card.taskId, card.title)}
-                                    className="text-[11px] text-[#BF2600] hover:underline"
+                                    className="text-[11px] text-[var(--danger)] hover:underline"
                                   >
                                     Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
                                   </button>
                                 </div>
                               </div>
-                              <span className="text-xs font-bold text-[#BF2600] flex-shrink-0">{card.hours}h</span>
+                              <span className="text-xs font-bold text-[var(--danger)] flex-shrink-0">{card.hours}h</span>
                             </div>
                           ))}
                         </div>
@@ -1087,22 +1117,22 @@ export default function App() {
 
       <AnimatePresence>
         {commentTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
+              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-[#DFE1E6] flex items-start justify-between gap-4">
+              <div className="p-6 border-b border-[var(--border-default)] flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-[#172B4D]">Comentarios tarea</h3>
-                  <p className="text-sm text-[#5E6C84] truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
+                  <h3 className="text-lg font-bold text-[var(--text-primary)]">Comentarios tarea</h3>
+                  <p className="text-sm text-[var(--text-muted)] truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
                 </div>
                 <button
                   type="button"
                   onClick={closeCommentsEditor}
-                  className="p-2 text-[#5E6C84] hover:bg-[#EBECF0] rounded-lg"
+                  className="p-2 text-[var(--text-muted)] hover:bg-[var(--bg-surface-muted)] rounded-lg"
                   aria-label="Cerrar comentarios"
                 >
                   <X className="w-4 h-4" />
@@ -1112,18 +1142,18 @@ export default function App() {
               <form onSubmit={handleSaveComments} className="p-6 space-y-4">
                 <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
                   {commentDrafts.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[#DFE1E6] bg-[#FAFBFC] px-4 py-6 text-sm text-[#5E6C84] text-center">
+                    <div className="rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-soft)] px-4 py-6 text-sm text-[var(--text-muted)] text-center">
                       Sin comentarios. Añade uno.
                     </div>
                   ) : (
                     commentDrafts.map((comment, index) => (
-                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-[#DFE1E6] bg-[#FAFBFC] p-3 space-y-2">
+                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-soft)] p-3 space-y-2">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-xs font-bold uppercase tracking-wide text-[#5E6C84]">Comentario {index + 1}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Comentario {index + 1}</span>
                           <button
                             type="button"
                             onClick={() => handleDeleteCommentDraft(index)}
-                            className="text-xs font-bold text-[#EB5A46] hover:underline"
+                            className="text-xs font-bold text-[var(--danger-action)] hover:underline"
                           >
                             Borrar
                           </button>
@@ -1136,7 +1166,7 @@ export default function App() {
                           onChange={(e) => handleCommentDraftChange(index, e.target.value)}
                           rows={3}
                           placeholder="Escribe comentario"
-                          className="w-full px-3 py-2 bg-white border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                          className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
                         />
                       </div>
                     ))
@@ -1146,7 +1176,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleAddCommentDraft}
-                  className="w-full py-2 border-2 border-dashed border-[#DFE1E6] text-[#5E6C84] hover:border-[#0052CC] hover:text-[#0052CC] rounded-lg text-sm font-medium transition-all"
+                  className="w-full py-2 border-2 border-dashed border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] rounded-lg text-sm font-medium transition-all"
                 >
                   Añadir comentario
                 </button>
@@ -1154,14 +1184,14 @@ export default function App() {
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-[#0052CC] text-white rounded-md font-bold hover:bg-[#0747A6] transition-colors"
+                    className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
                   >
                     Guardar comentarios
                   </button>
                   <button
                     type="button"
                     onClick={closeCommentsEditor}
-                    className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
+                    className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
                   >
                     Cancelar
                   </button>
@@ -1174,34 +1204,34 @@ export default function App() {
 
       <AnimatePresence>
         {editingTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-6">
-                <h3 className="text-lg font-bold text-[#172B4D] mb-4">Editar tarea</h3>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Editar tarea</h3>
                 <form onSubmit={handleSaveTaskEdit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
                     <button
                       type="button"
                       onClick={() => setEditingMode('url')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
                     >
                       URL Trello
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingMode('name')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
                     >
                       Tarea provisional
                     </button>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
                       {editingMode === 'url' ? 'Nueva URL Trello' : 'Nombre tarea'}
                     </label>
                     <input
@@ -1212,12 +1242,12 @@ export default function App() {
                         ? setEditingUrlValue(e.target.value)
                         : setEditingNameValue(e.target.value)}
                       placeholder={editingMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Revisión backlog sprint'}
-                      className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
                   </div>
                   <div>
-                      <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Horas registro</label>
+                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">Horas registro</label>
                     <input
                       type="number"
                       step={roundingStep}
@@ -1225,14 +1255,14 @@ export default function App() {
                       required
                       value={editingHours}
                       onChange={(e) => setEditingHours(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 bg-[#0052CC] text-white rounded-md font-bold hover:bg-[#0747A6] transition-colors"
+                      className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
                     >
                       Guardar
                     </button>
@@ -1246,7 +1276,7 @@ export default function App() {
                         setEditingNameValue('');
                         setEditingHours('');
                       }}
-                      className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
+                      className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
                     >
                       Cancelar
                     </button>
