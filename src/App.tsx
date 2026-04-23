@@ -348,7 +348,7 @@ export default function App() {
       const entry = entries.find(en => en.id === imputeEntryId);
       if (entry && entry.cardUrl) {
         // push to Trello: may throw on network or validation errors
-        await addHoursToCard(entry.cardUrl, entry.hours, nick);
+        //await addHoursToCard(entry.cardUrl, entry.hours, nick);
       }
 
       setEntries(prev =>
