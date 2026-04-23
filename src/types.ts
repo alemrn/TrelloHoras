@@ -12,6 +12,7 @@ export interface TimeEntry {
 export interface ActiveTimer {
   cardUrl?: string | null;
   cardTitle: string;
+  comments?: string[];
   taskId: string;
   startTime: number; // timestamp
 }

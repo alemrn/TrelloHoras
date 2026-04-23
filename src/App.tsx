@@ -147,6 +147,7 @@ export default function App() {
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [timerInputMode, setTimerInputMode] = useState<TaskInputMode>('url');
   const [tempTaskValue, setTempTaskValue] = useState('');
+  const [tempTimerComment, setTempTimerComment] = useState('');
   const [manualInputMode, setManualInputMode] = useState<TaskInputMode>('url');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -178,8 +179,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTimer]);
 
-  const roundToHalf = (hours: number) => {
-    return Math.ceil(hours * 2) / 2;
+  const roundToQuarter = (hours: number) => {
+    return Math.ceil(hours * 4) / 4;
   };
 
   const findTaskId = (cardUrl?: string | null, cardTitle?: string | null, excludedTaskId?: string | null) => {
@@ -199,6 +200,19 @@ export default function App() {
   const normalizeComments = (comments: string[]) =>
     comments.map(comment => comment.trim()).filter(Boolean);
 
+  const buildNextTaskComments = (taskId: string, newComments: string[] = []) =>
+    normalizeComments([...getTaskComments(taskId), ...newComments]);
+
+  const syncTaskComments = (taskId: string, comments: string[]) => {
+    setEntries(prev =>
+      prev.map(entry =>
+        entry.taskId === taskId
+          ? { ...entry, comments }
+          : entry
+      )
+    );
+  };
+
   const handleStartTimer = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedValue = tempTaskValue.trim();
@@ -210,14 +224,21 @@ export default function App() {
       ? extractTitleFromUrl(trimmedValue)
       : normalizeTaskTitle(trimmedValue);
     const taskId = findTaskId(nextCardUrl, nextCardTitle) || crypto.randomUUID();
+    const nextComments = buildNextTaskComments(taskId, [tempTimerComment]);
+
+    if (nextComments.length > 0) {
+      syncTaskComments(taskId, nextComments);
+    }
     
     setActiveTimer({
       taskId,
       cardUrl: nextCardUrl,
       cardTitle: nextCardTitle,
+      comments: nextComments,
       startTime: Date.now()
     });
     setTempTaskValue('');
+    setTempTimerComment('');
     setTimerInputMode('url');
     setIsTimerModalOpen(false);
   };
@@ -226,16 +247,16 @@ export default function App() {
     if (!activeTimer) return;
     
     const hours = elapsedSeconds / 3600;
-    const roundedHours = roundToHalf(hours);
+    const roundedHours = roundToQuarter(hours);
     
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
       taskId: activeTimer.taskId,
       cardUrl: activeTimer.cardUrl,
       cardTitle: activeTimer.cardTitle,
-      comments: getTaskComments(activeTimer.taskId),
+      comments: activeTimer.comments ?? getTaskComments(activeTimer.taskId),
       date: new Date().toISOString().split('T')[0],
-      hours: Math.max(0.5, roundedHours), // Minimum 0.5 if started
+      hours: Math.max(0.25, roundedHours), // Minimum 0.25 if started
       imputed: false,
     };
 
@@ -249,15 +270,20 @@ export default function App() {
     const mode = formData.get('taskMode') as TaskInputMode;
     const taskValue = (formData.get(mode === 'url' ? 'url' : 'title') as string)?.trim();
     const hoursInput = parseFloat(formData.get('hours') as string);
+    const commentInput = (formData.get('comment') as string)?.trim() ?? '';
     
     if (!taskValue || isNaN(hoursInput)) return;
     if (mode === 'url' && !isValidHttpUrl(taskValue)) return;
 
-    const roundedHours = roundToHalf(hoursInput);
+    const roundedHours = roundToQuarter(hoursInput);
     const cardUrl = mode === 'url' ? taskValue : null;
     const cardTitle = mode === 'url' ? extractTitleFromUrl(taskValue) : normalizeTaskTitle(taskValue);
     const taskId = findTaskId(cardUrl, cardTitle) || crypto.randomUUID();
-    const comments = getTaskComments(taskId);
+    const comments = buildNextTaskComments(taskId, [commentInput]);
+
+    if (comments.length > 0) {
+      syncTaskComments(taskId, comments);
+    }
 
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
@@ -299,7 +325,7 @@ export default function App() {
       ? extractTitleFromUrl(trimmedValue)
       : normalizeTaskTitle(trimmedValue);
     const nextTaskId = findTaskId(nextCardUrl, nextCardTitle, editingTaskId) || editingTaskId;
-    const roundedHours = roundToHalf(hoursInput);
+    const roundedHours = roundToQuarter(hoursInput);
     const nextComments = nextTaskId === editingTaskId
       ? getTaskComments(editingTaskId)
       : getTaskComments(nextTaskId);
@@ -607,6 +633,18 @@ export default function App() {
                               className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">
+                              Comentario
+                            </label>
+                            <textarea
+                              value={tempTimerComment}
+                              onChange={(e) => setTempTimerComment(e.target.value)}
+                              rows={3}
+                              placeholder="Ej: Llamada cliente, dudas scope"
+                              className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                            />
+                          </div>
                           <div className="flex gap-3 pt-2">
                             <button 
                               type="submit"
@@ -619,6 +657,7 @@ export default function App() {
                               onClick={() => {
                                 setIsTimerModalOpen(false);
                                 setTempTaskValue('');
+                                setTempTimerComment('');
                                 setTimerInputMode('url');
                               }}
                               className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
@@ -652,7 +691,7 @@ export default function App() {
                 ) : (
                   <form onSubmit={handleManualAdd} className="space-y-4">
                     <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
-                      <label className="cursor-pointer rounded-md">
+                      <label className="cursor-pointer rounded-md h-full">
                         <input
                           type="radio"
                           name="taskMode"
@@ -661,11 +700,11 @@ export default function App() {
                           onChange={() => setManualInputMode('url')}
                           className="sr-only peer"
                         />
-                        <span className="block rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
                           URL Trello
                         </span>
                       </label>
-                      <label className="cursor-pointer rounded-md">
+                      <label className="cursor-pointer rounded-md h-full">
                         <input
                           type="radio"
                           name="taskMode"
@@ -674,7 +713,7 @@ export default function App() {
                           onChange={() => setManualInputMode('name')}
                           className="sr-only peer"
                         />
-                        <span className="block rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
+                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[#5E6C84] transition-colors peer-checked:bg-white peer-checked:text-[#0052CC] peer-checked:shadow-sm">
                           Tarea provisional
                         </span>
                       </label>
@@ -703,12 +742,22 @@ export default function App() {
                       <input 
                         name="hours"
                         type="number"
-                        step="0.5"
+                        step="0.25"
+                        min="0.25"
                         required
                         placeholder="Ej: 1.5"
                         className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                       />
-                      <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Se redondeará al múltiplo de 0.5 superior</p>
+                      <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Redondeo al múltiplo superior 0.25.</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#5E6C84] mb-1">COMENTARIO</label>
+                      <textarea
+                        name="comment"
+                        rows={3}
+                        placeholder="Ej: Reunión, cambios copy, bug login"
+                        className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none resize-y"
+                      />
                     </div>
                     <div className="flex gap-2">
                       <button 
@@ -1135,14 +1184,14 @@ export default function App() {
                     <label className="block text-xs font-bold text-[#5E6C84] mb-1 uppercase">Horas registro</label>
                     <input
                       type="number"
-                      step="0.5"
-                      min="0.5"
+                      step="0.25"
+                      min="0.25"
                       required
                       value={editingHours}
                       onChange={(e) => setEditingHours(e.target.value)}
                       className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro.</p>
+                    <p className="text-[10px] text-[#5E6C84] mt-1 italic">* Horas solo cambian este registro. Redondeo 0.25 arriba.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
                     <button
