@@ -7,6 +7,9 @@ export interface TimeEntry {
   date: string; // ISO date string (YYYY-MM-DD)
   hours: number;
   imputed: boolean;
+  // Opcional: quien imputó la hora y la categoría seleccionada
+  imputedBy?: string;
+  imputedCategory?: string;
 }
 
 export interface ActiveTimer {
