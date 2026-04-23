@@ -144,7 +144,8 @@ export default function App() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingMode, setEditingMode] = useState<TaskInputMode>('name');
-  const [editingValue, setEditingValue] = useState('');
+  const [editingUrlValue, setEditingUrlValue] = useState('');
+  const [editingNameValue, setEditingNameValue] = useState('');
   const [editingHours, setEditingHours] = useState('');
 
   // Persistence
@@ -254,7 +255,8 @@ export default function App() {
     setEditingEntryId(entry.id);
     setEditingTaskId(entry.taskId);
     setEditingMode(entry.cardUrl ? 'url' : 'name');
-    setEditingValue(entry.cardUrl || entry.cardTitle);
+    setEditingUrlValue(entry.cardUrl || '');
+    setEditingNameValue(entry.cardUrl ? '' : entry.cardTitle || '');
     setEditingHours(entry.hours.toString());
   };
 
@@ -262,7 +264,7 @@ export default function App() {
     e.preventDefault();
     if (!editingTaskId || !editingEntryId) return;
 
-    const trimmedValue = editingValue.trim();
+    const trimmedValue = (editingMode === 'url' ? editingUrlValue : editingNameValue).trim();
     if (!trimmedValue) return;
     if (editingMode === 'url' && !isValidHttpUrl(trimmedValue)) return;
 
@@ -297,7 +299,8 @@ export default function App() {
     setEditingEntryId(null);
     setEditingTaskId(null);
     setEditingMode('name');
-    setEditingValue('');
+    setEditingUrlValue('');
+    setEditingNameValue('');
     setEditingHours('');
   };
 
@@ -906,20 +909,14 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#EBECF0] p-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingMode('url');
-                        setEditingValue('');
-                      }}
+                      onClick={() => setEditingMode('url')}
                       className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
                     >
                       URL Trello
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingMode('name');
-                        setEditingValue('');
-                      }}
+                      onClick={() => setEditingMode('name')}
                       className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-white text-[#0052CC] shadow-sm' : 'text-[#5E6C84]'}`}
                     >
                       Tarea provisional
@@ -932,8 +929,10 @@ export default function App() {
                     <input
                       autoFocus
                       required
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
+                      value={editingMode === 'url' ? editingUrlValue : editingNameValue}
+                      onChange={(e) => editingMode === 'url'
+                        ? setEditingUrlValue(e.target.value)
+                        : setEditingNameValue(e.target.value)}
                       placeholder={editingMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Revisión backlog sprint'}
                       className="w-full px-3 py-2 bg-[#FAFBFC] border border-[#DFE1E6] rounded-md text-sm focus:ring-2 focus:ring-[#0052CC] focus:border-transparent outline-none"
                     />
@@ -965,7 +964,8 @@ export default function App() {
                         setEditingEntryId(null);
                         setEditingTaskId(null);
                         setEditingMode('name');
-                        setEditingValue('');
+                        setEditingUrlValue('');
+                        setEditingNameValue('');
                         setEditingHours('');
                       }}
                       className="px-4 py-2.5 bg-[#EBECF0] text-[#172B4D] rounded-md font-bold hover:bg-[#DFE1E6] transition-colors"
