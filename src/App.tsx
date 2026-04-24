@@ -23,121 +23,36 @@ import {
   Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import Button, { IconButton } from './components/Button';
+import ActiveTimerCard from './components/ActiveTimerCard';
+import EntriesList from './components/EntriesList';
+import TrackerView from './components/TrackerView';
+import SummaryView from './components/SummaryView';
+import ImputeModal from './components/ImputeModal';
+import Header from './components/Header';
 import { TimeEntry, ActiveTimer } from './types';
-
-const STORAGE_KEY = 'trello-time-entries';
-const ROUNDING_MODE_KEY = 'trello-time-rounding-mode';
-const THEME_MODE_KEY = 'trello-time-theme-mode';
-const FALLBACK_CARD_TITLE = 'Trello Card';
-const FALLBACK_TASK_TITLE = 'Tarea sin nombre';
+import {
+  STORAGE_KEY,
+  ROUNDING_MODE_KEY,
+  THEME_MODE_KEY,
+  FALLBACK_CARD_TITLE,
+  FALLBACK_TASK_TITLE,
+  generateUUID,
+  toTitleCase,
+  extractTitleFromUrl,
+  isValidHttpUrl,
+  normalizeTaskTitle,
+  normalizeTaskIdentity,
+  buildTaskKey,
+  buildLegacyTaskId,
+  normalizeEntries,
+  formatISODate,
+  getCurrentWeekdays,
+  weekdayLabels,
+  roundHours,
+} from './utils';
 
 type TaskInputMode = 'url' | 'name';
-
-const toTitleCase = (text: string) =>
-  text
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-
-const extractTitleFromUrl = (url: string) => {
-  try {
-    const { pathname } = new URL(url);
-    const parts = pathname.split('/').filter(Boolean);
-    const slug = parts.find(part => part.includes('-'));
-
-    if (!slug) {
-      return FALLBACK_CARD_TITLE;
-    }
-
-    const decodedSlug = decodeURIComponent(slug);
-    const normalizedSlug = decodedSlug.replace(/-/g, ' ').trim();
-
-    return normalizedSlug ? toTitleCase(normalizedSlug) : FALLBACK_CARD_TITLE;
-  } catch {
-    return FALLBACK_CARD_TITLE;
-  }
-};
-
-const isValidHttpUrl = (value: string) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
-
-const normalizeTaskTitle = (title?: string | null) => {
-  const trimmedTitle = title?.replace(/\s+/g, ' ').trim();
-  return trimmedTitle || FALLBACK_TASK_TITLE;
-};
-
-const normalizeTaskIdentity = (title?: string | null) =>
-  normalizeTaskTitle(title)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase();
-
-const buildTaskKey = (cardUrl?: string | null, cardTitle?: string | null) => {
-  if (cardUrl?.trim()) {
-    return `url:${cardUrl.trim()}`;
-  }
-
-  return `title:${normalizeTaskIdentity(cardTitle)}`;
-};
-
-const buildLegacyTaskId = (entry: Partial<TimeEntry>) => {
-  const rawKey = entry.cardUrl?.trim() || entry.cardTitle?.trim() || crypto.randomUUID();
-  return `legacy:${rawKey}`;
-};
-
-const normalizeEntries = (savedEntries: TimeEntry[]) =>
-  savedEntries.reduce<TimeEntry[]>((acc, entry) => {
-    const cardUrl = entry.cardUrl?.trim() || null;
-    const cardTitle = cardUrl ? extractTitleFromUrl(cardUrl) : normalizeTaskTitle(entry.cardTitle);
-    const taskKey = buildTaskKey(cardUrl, cardTitle);
-    const sharedTaskId = acc.find(savedEntry => buildTaskKey(savedEntry.cardUrl, savedEntry.cardTitle) === taskKey)?.taskId;
-    const sharedComments = acc.find(savedEntry => (sharedTaskId || entry.taskId) === savedEntry.taskId)?.comments ?? [];
-    const ownComments = Array.isArray(entry.comments)
-      ? entry.comments.filter(comment => typeof comment === 'string').map(comment => comment.trim()).filter(Boolean)
-      : [];
-
-    acc.push({
-      ...entry,
-      taskId: sharedTaskId || entry.taskId || buildLegacyTaskId(entry),
-      cardUrl,
-      cardTitle,
-      comments: ownComments.length > 0 ? ownComments : sharedComments,
-      imputed: Boolean(entry.imputed),
-    });
-
-    return acc;
-  }, []);
-
-const formatISODate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getCurrentWeekdays = () => {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-  const monday = new Date(today);
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(today.getDate() + diffToMonday);
-
-  return Array.from({ length: 5 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
-    return date;
-  });
-};
-
-const weekdayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
 export default function App() {
   const [entries, setEntries] = useState<TimeEntry[]>(() => {
@@ -160,6 +75,8 @@ export default function App() {
     const savedMode = localStorage.getItem(ROUNDING_MODE_KEY);
     return savedMode ? savedMode === 'true' : true;
   });
+  // Paso de redondeo activo: 0.25 si está activado el modo 'round', 0.5 si no
+  const roundingStep = isRoundModeEnabled ? 0.25 : 0.5;
   const [isAddingManual, setIsAddingManual] = useState(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
   const [timerInputMode, setTimerInputMode] = useState<TaskInputMode>('url');
@@ -177,6 +94,16 @@ export default function App() {
   const [commentDrafts, setCommentDrafts] = useState<string[]>([]);
   const commentInputRefs = useRef<Array<HTMLTextAreaElement | null>>([]);
   const pendingCommentFocusIndex = useRef<number | null>(null);
+
+  // Estado para el modal de imputar horas
+  const [imputeEntryId, setImputeEntryId] = useState<string | null>(null);
+  const [imputeNick, setImputeNick] = useState<string>('');
+  const [imputeCategory, setImputeCategory] = useState<'Desarrollo' | 'Gestion' | 'Validación' | 'Producción'>('Desarrollo');
+  // Estado de envío y error para la llamada a Trello
+  const [isImputing, setIsImputing] = useState(false);
+  const [imputeError, setImputeError] = useState<string | null>(null);
+
+  const imputeEntry = useMemo(() => imputeEntryId ? entries.find(e => e.id === imputeEntryId) ?? null : null, [entries, imputeEntryId]);
 
   // Persistence
   useEffect(() => {
@@ -204,13 +131,6 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [activeTimer]);
-
-  const roundHours = (hours: number) => {
-    const step = isRoundModeEnabled ? 0.25 : 0.5;
-    return Math.ceil(hours / step) * step;
-  };
-
-  const roundingStep = isRoundModeEnabled ? 0.25 : 0.5;
 
   const findTaskId = (cardUrl?: string | null, cardTitle?: string | null, excludedTaskId?: string | null) => {
     const taskKey = buildTaskKey(cardUrl, cardTitle);
@@ -252,7 +172,7 @@ export default function App() {
     const nextCardTitle = timerInputMode === 'url'
       ? extractTitleFromUrl(trimmedValue)
       : normalizeTaskTitle(trimmedValue);
-    const taskId = findTaskId(nextCardUrl, nextCardTitle) || crypto.randomUUID();
+    const taskId = findTaskId(nextCardUrl, nextCardTitle) || generateUUID();
     const nextComments = buildNextTaskComments(taskId, [tempTimerComment]);
 
     if (nextComments.length > 0) {
@@ -276,16 +196,16 @@ export default function App() {
     if (!activeTimer) return;
     
     const hours = elapsedSeconds / 3600;
-    const roundedHours = roundHours(hours);
+    const roundedHours = roundHours(hours, roundingStep);
     
     const newEntry: TimeEntry = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       taskId: activeTimer.taskId,
       cardUrl: activeTimer.cardUrl,
       cardTitle: activeTimer.cardTitle,
       comments: activeTimer.comments ?? getTaskComments(activeTimer.taskId),
       date: new Date().toISOString().split('T')[0],
-      hours: Math.max(roundingStep, roundedHours),
+      hours: Math.max(0.25, roundedHours),
       imputed: false,
     };
 
@@ -304,10 +224,10 @@ export default function App() {
     if (!taskValue || isNaN(hoursInput)) return;
     if (mode === 'url' && !isValidHttpUrl(taskValue)) return;
 
-    const roundedHours = roundHours(hoursInput);
+    const roundedHours = roundHours(hoursInput, roundingStep);
     const cardUrl = mode === 'url' ? taskValue : null;
     const cardTitle = mode === 'url' ? extractTitleFromUrl(taskValue) : normalizeTaskTitle(taskValue);
-    const taskId = findTaskId(cardUrl, cardTitle) || crypto.randomUUID();
+    const taskId = findTaskId(cardUrl, cardTitle) || generateUUID();
     const comments = buildNextTaskComments(taskId, [commentInput]);
 
     if (comments.length > 0) {
@@ -315,7 +235,7 @@ export default function App() {
     }
 
     const newEntry: TimeEntry = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       taskId,
       cardUrl,
       cardTitle,
@@ -354,7 +274,7 @@ export default function App() {
       ? extractTitleFromUrl(trimmedValue)
       : normalizeTaskTitle(trimmedValue);
     const nextTaskId = findTaskId(nextCardUrl, nextCardTitle, editingTaskId) || editingTaskId;
-    const roundedHours = roundHours(hoursInput);
+    const roundedHours = roundHours(hoursInput, roundingStep);
     const nextComments = nextTaskId === editingTaskId
       ? getTaskComments(editingTaskId)
       : getTaskComments(nextTaskId);
@@ -396,6 +316,55 @@ export default function App() {
         entry.id === id ? { ...entry, imputed: !entry.imputed } : entry
       )
     );
+  };
+
+  // Abrir modal de imputar: precargar nick si existe en localStorage
+  const openImputeModal = (entry: TimeEntry) => {
+    const savedNick = localStorage.getItem('trello-nick') || '';
+    setImputeNick(savedNick);
+    setImputeCategory('Desarrollo');
+    setImputeEntryId(entry.id);
+  };
+
+  const closeImputeModal = () => {
+    setImputeEntryId(null);
+    setImputeNick('');
+    setImputeCategory('Desarrollo');
+  };
+
+  const handleImputeSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!imputeEntryId) return;
+    const nick = imputeNick.trim();
+    if (!nick) return;
+
+    // Persistir nick para próximas veces
+    localStorage.setItem('trello-nick', nick);
+
+    setIsImputing(true);
+    setImputeError(null);
+
+    try {
+      const entry = entries.find(en => en.id === imputeEntryId);
+      if (entry && entry.cardUrl) {
+        // push to Trello: may throw on network or validation errors
+        //await addHoursToCard(entry.cardUrl, entry.hours, nick);
+      }
+
+      setEntries(prev =>
+        prev.map(entry =>
+          entry.id === imputeEntryId
+            ? { ...entry, imputed: true, imputedBy: nick, imputedCategory: imputeCategory }
+            : entry
+        )
+      );
+
+      closeImputeModal();
+    } catch (err) {
+      setImputeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImputing(false);
+    }
   };
 
   const openCommentsEditor = (taskId: string, title: string) => {
@@ -543,596 +512,72 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans transition-colors">
+    <div className="min-h-screen bg-(--bg-app) text-(--text-primary) font-sans transition-colors">
       {/* Header */}
-      <header className="bg-[var(--bg-surface)] border-b border-[var(--border-default)] sticky top-0 z-10 transition-colors">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <div className="bg-[var(--brand-primary)] p-1.5 rounded-md transition-colors">
-                <Clock className="w-5 h-5 text-[var(--text-inverse)]" />
-              </div>
-              <h1 className="text-xl font-bold tracking-tight text-[var(--brand-primary)]">TrelloTime</h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsDarkMode(prev => !prev)}
-              className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-muted)] px-3 text-sm font-medium text-[var(--text-muted)] transition-all hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
-              aria-pressed={isDarkMode}
-              aria-label={`Modo oscuro ${isDarkMode ? 'activado' : 'desactivado'}`}
-            >
-              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              <span className="hidden sm:inline">{isDarkMode ? 'Claro' : 'Oscuro'}</span>
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <nav className="flex gap-1 bg-[var(--bg-surface-muted)] p-1 rounded-lg transition-colors">
-              <button 
-                onClick={() => setView('tracker')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'tracker' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
-              >
-                <Layout className="w-4 h-4" />
-                Tracker
-              </button>
-              <button 
-                onClick={() => setView('summary')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'summary' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--brand-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--border-default)]'}`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Resumen
-              </button>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header
+        initialView={view}
+        onViewChange={setView}
+        initialIsDarkMode={isDarkMode}
+        onThemeChange={setIsDarkMode}
+      />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         {view === 'tracker' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Controls */}
-            <div className="lg:col-span-1 space-y-6">
-              {/* Active Timer Card */}
-              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-6 shadow-sm">
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <div className="flex min-w-max flex-1 items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
-                      <Timer className="w-4 h-4" />
-                      Cronómetro
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => setIsRoundModeEnabled(prev => !prev)}
-                      className="flex items-center gap-2"
-                      aria-pressed={isRoundModeEnabled}
-                      aria-label={`Modo Amaia ${isRoundModeEnabled ? 'activado' : 'desactivado'}`}
-                    >
-                      <span
-                        className={`relative h-6 w-10 rounded-full transition-colors ${isRoundModeEnabled ? 'bg-[var(--brand-primary)]' : 'bg-[var(--border-strong)]'}`}
-                      >
-                        <span
-                          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--bg-surface)] shadow-sm transition-all ${isRoundModeEnabled ? 'left-5' : 'left-1'}`}
-                        />
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
-                        {isRoundModeEnabled ? '0.25' : '0.5'}
-                      </span>
-                    </button>
-                  </div>
-                  {!activeTimer ? (
-                    <button 
-                      onClick={() => setIsTimerModalOpen(true)}
-                      className="min-w-[11rem] flex-1 px-4 py-2 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-[var(--text-inverse)] rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
-                    >
-                      <Play className="w-4 h-4 fill-current" />
-                      Iniciar tarea
-                    </button>
-                  ) : null}
-                </div>
-                
-                {activeTimer ? (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <div className="text-4xl font-mono font-bold text-[var(--text-primary)] mb-1">
-                        {formatTime(elapsedSeconds)}
-                      </div>
-                      <p className="text-sm text-[var(--text-muted)] truncate px-2" title={activeTimer.cardTitle}>
-                        {activeTimer.cardTitle}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={handleStopTimer}
-                      className="w-full py-3 bg-[var(--danger-action)] hover:bg-[var(--danger-action-hover)] text-[var(--text-inverse)] rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
-                    >
-                      <Square className="w-4 h-4 fill-current" />
-                      Detener y Guardar
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Timer Modal */}
-              <AnimatePresence>
-                {isTimerModalOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
-                    >
-                      <div className="p-6">
-                        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Nueva Tarea</h3>
-                        <form onSubmit={handleStartTimer} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTimerInputMode('url');
-                                setTempTaskValue('');
-                              }}
-                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
-                            >
-                              URL Trello
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTimerInputMode('name');
-                                setTempTaskValue('');
-                              }}
-                              className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${timerInputMode === 'name' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
-                            >
-                              Tarea provisional
-                            </button>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
-                              {timerInputMode === 'url' ? 'Enlace de la tarjeta de Trello' : 'Nombre de la tarea'}
-                            </label>
-                            <input 
-                              autoFocus
-                              required
-                              value={tempTaskValue}
-                              onChange={(e) => setTempTaskValue(e.target.value)}
-                              placeholder={timerInputMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Refinar propuesta cliente'}
-                              className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
-                              Comentario
-                            </label>
-                            <textarea
-                              value={tempTimerComment}
-                              onChange={(e) => setTempTimerComment(e.target.value)}
-                              rows={3}
-                              placeholder="Ej: Llamada cliente, dudas scope"
-                              className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
-                            />
-                          </div>
-                          <div className="flex gap-3 pt-2">
-                            <button 
-                              type="submit"
-                              className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
-                            >
-                              Iniciar Cronómetro
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                setIsTimerModalOpen(false);
-                                setTempTaskValue('');
-                                setTempTimerComment('');
-                                setTimerInputMode('url');
-                              }}
-                              className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-
-              {/* Manual Add Card */}
-              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    Añadir Manual
-                  </h2>
-                </div>
-                
-                {!isAddingManual ? (
-                  <button 
-                    onClick={() => setIsAddingManual(true)}
-                    className="w-full py-2 border-2 border-dashed border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] rounded-lg text-sm font-medium transition-all"
-                  >
-                    Registrar horas manualmente
-                  </button>
-                ) : (
-                  <form onSubmit={handleManualAdd} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
-                      <label className="cursor-pointer rounded-md h-full">
-                        <input
-                          type="radio"
-                          name="taskMode"
-                          value="url"
-                          checked={manualInputMode === 'url'}
-                          onChange={() => setManualInputMode('url')}
-                          className="sr-only peer"
-                        />
-                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
-                          URL Trello
-                        </span>
-                      </label>
-                      <label className="cursor-pointer rounded-md h-full">
-                        <input
-                          type="radio"
-                          name="taskMode"
-                          value="name"
-                          checked={manualInputMode === 'name'}
-                          onChange={() => setManualInputMode('name')}
-                          className="sr-only peer"
-                        />
-                        <span className="flex min-h-[72px] items-center justify-center rounded-md px-3 py-2 text-center text-sm font-bold text-[var(--text-muted)] transition-colors peer-checked:bg-[var(--bg-surface)] peer-checked:text-[var(--brand-primary)] peer-checked:shadow-sm">
-                          Tarea provisional
-                        </span>
-                      </label>
-                    </div>
-                    {manualInputMode === 'url' ? (
-                      <div>
-                        <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">URL DE TRELLO</label>
-                        <input 
-                          name="url"
-                          placeholder="https://trello.com/c/..."
-                          className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">NOMBRE TAREA PROVISIONAL</label>
-                        <input 
-                          name="title"
-                          placeholder="Ej: Revisión backlog sprint"
-                          className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">HORAS</label>
-                      <input 
-                        name="hours"
-                        type="number"
-                        step={roundingStep}
-                        min={roundingStep}
-                        required
-                        placeholder="Ej: 1.5"
-                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
-                      />
-                      <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Redondeo al múltiplo superior {roundingStep}.</p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1">COMENTARIO</label>
-                      <textarea
-                        name="comment"
-                        rows={3}
-                        placeholder="Ej: Reunión, cambios copy, bug login"
-                        className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button 
-                        type="submit"
-                        className="flex-1 py-2 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md text-sm font-bold hover:bg-[var(--brand-primary-hover)]"
-                      >
-                        Guardar
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setIsAddingManual(false)}
-                        className="px-4 py-2 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md text-sm font-bold hover:bg-[var(--border-default)]"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column: List */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  <History className="w-5 h-5 text-[var(--brand-primary)]" />
-                  Historial Reciente
-                </h2>
-                <span className="text-xs font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full">
-                  {entries.length} registros
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <AnimatePresence initial={false}>
-                  {entries.length === 0 ? (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-12 text-center"
-                    >
-                      <div className="bg-[var(--bg-surface-muted)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Clock className="w-8 h-8 text-[var(--text-muted)]" />
-                      </div>
-                      <h3 className="text-[var(--text-primary)] font-bold">No hay registros aún</h3>
-                      <p className="text-[var(--text-muted)] text-sm mt-1">Empieza a trackear tu tiempo en Trello.</p>
-                    </motion.div>
-                  ) : (
-                    entries.map((entry) => (
-                      <motion.div
-                        key={entry.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className="group rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm transition-all hover:border-[var(--brand-primary)]"
-                      >
-                        <div className="flex flex-col gap-3">
-                          <div className="flex min-w-0 gap-3">
-                            <label className="flex items-center justify-center flex-shrink-0 cursor-pointer pt-1">
-                              <input
-                                type="checkbox"
-                                checked={entry.imputed}
-                                onChange={() => handleToggleImputed(entry.id)}
-                                className="h-4 w-4 rounded border-[var(--border-strong)] text-[var(--brand-primary)] focus:ring-[var(--brand-primary)]"
-                                aria-label={`Marcar ${entry.cardTitle} como imputada`}
-                              />
-                            </label>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <h4 className="min-w-0 flex-1 pr-2 text-[15px] font-semibold leading-tight text-[var(--text-primary)] break-words" title={entry.cardTitle}>
-                                  {entry.cardTitle}
-                                </h4>
-                                <span className="text-lg font-bold text-[var(--brand-primary)] whitespace-nowrap">{entry.hours}h</span>
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.cardUrl ? 'bg-[var(--info-soft)] text-[var(--brand-primary-hover)]' : 'bg-[var(--warning-soft)] text-[var(--warning)]'}`}>
-                                  {entry.cardUrl ? 'Trello' : 'Provisional'}
-                                </span>
-                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${entry.imputed ? 'bg-[var(--success-soft)] text-[var(--success)]' : 'bg-[var(--danger-soft)] text-[var(--danger)]'}`}>
-                                  {entry.imputed ? 'Imputada' : 'Sin imputar'}
-                                </span>
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                                <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                                  <CalendarIcon className="w-3 h-3" />
-                                  {entry.date}
-                                </span>
-                                {entry.cardUrl ? (
-                                  <a 
-                                    href={entry.cardUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-[var(--brand-primary)] hover:underline flex items-center gap-1"
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                    Ver en Trello
-                                  </a>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="ml-7 flex items-center justify-end gap-1 sm:gap-2">
-                              <button
-                                onClick={() => openCommentsEditor(entry.taskId, entry.cardTitle)}
-                                className="rounded-lg p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--bg-surface-muted)]"
-                                aria-label={`Comentarios ${entry.cardTitle}`}
-                              >
-                                <MessageSquare className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => openTaskEditor(entry)}
-                                className="rounded-lg p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--bg-surface-muted)]"
-                                aria-label={`Editar ${entry.cardTitle}`}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteEntry(entry.id)}
-                                className="rounded-lg p-2 text-[var(--danger-action)] transition-all hover:bg-[var(--danger-soft)]"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
+          <TrackerView
+            entries={entries}
+            activeTimer={activeTimer}
+            elapsedSeconds={elapsedSeconds}
+            isTimerModalOpen={isTimerModalOpen}
+            setIsTimerModalOpen={setIsTimerModalOpen}
+            timerInputMode={timerInputMode}
+            setTimerInputMode={setTimerInputMode}
+            tempTaskValue={tempTaskValue}
+            setTempTaskValue={setTempTaskValue}
+            tempTimerComment={tempTimerComment}
+            setTempTimerComment={setTempTimerComment}
+            isAddingManual={isAddingManual}
+            setIsAddingManual={setIsAddingManual}
+            manualInputMode={manualInputMode}
+            setManualInputMode={setManualInputMode}
+            handleStartTimer={handleStartTimer}
+            handleStopTimer={handleStopTimer}
+            handleManualAdd={handleManualAdd}
+            isRoundModeEnabled={isRoundModeEnabled}
+            onToggleRoundMode={() => setIsRoundModeEnabled(prev => !prev)}
+            formatTime={formatTime}
+            openCommentsEditor={openCommentsEditor}
+            openTaskEditor={openTaskEditor}
+            openImputeModal={openImputeModal}
+            handleDeleteEntry={handleDeleteEntry}
+            handleToggleImputed={handleToggleImputed}
+          />
         ) : (
-          <div className="space-y-4">
-            {weeklySummary.length > 0 && (
-              <section className="bg-[var(--bg-surface)] rounded-lg border border-[var(--border-default)] shadow-sm overflow-hidden">
-                <div className="px-4 py-2 border-b border-[var(--border-default)] bg-[var(--bg-app)] flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">Resumen semanal</h3>
-                    <p className="text-xs text-[var(--text-muted)] leading-tight">Semana actual, lunes a viernes</p>
-                  </div>
-                  <span className="text-[11px] font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full whitespace-nowrap">
-                    {weeklySummary.reduce((total, day) => total + day.total, 0)}h totales
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-[repeat(5,minmax(0,1fr))] gap-2 p-2.5">
-                  {weeklySummary.map((day) => (
-                    <article
-                      key={day.date}
-                      className="min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface-soft)] p-2 flex flex-col gap-1.5"
-                    >
-                      <div className="pb-1.5 border-b border-[var(--border-default)]">
-                        <p className="text-[13px] font-bold text-[var(--text-primary)] leading-none truncate">{day.label}</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-none truncate">{day.date}</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="rounded-md bg-[var(--info-soft)] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--brand-primary-hover)] leading-none">Total</p>
-                          <p className="text-sm font-bold text-[var(--brand-primary)] leading-none mt-1">{day.total}h</p>
-                        </div>
-                        <div className="rounded-md bg-[var(--success-soft-alt)] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--success)] leading-none">Imputadas</p>
-                          <p className="text-xs font-bold text-[var(--success)] leading-none mt-1">{day.imputedTotal}h</p>
-                        </div>
-                        <div className="rounded-md bg-[var(--danger-soft-alt)] px-2 py-1.5">
-                          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--danger)] leading-none">Sin imputar</p>
-                          <p className="text-xs font-bold text-[var(--danger)] leading-none mt-1">{day.pendingTotal}h</p>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-[var(--brand-primary)]" />
-                Resumen por Día
-              </h2>
-              <span className="text-xs font-medium bg-[var(--border-default)] text-[var(--text-primary)] px-2 py-1 rounded-full">
-                {dailySummary.length} días
-              </span>
-            </div>
-
-            {dailySummary.length === 0 ? (
-              <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] p-12 text-center shadow-sm">
-                <div className="bg-[var(--bg-surface-muted)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CalendarIcon className="w-8 h-8 text-[var(--text-muted)]" />
-                </div>
-                <h3 className="text-[var(--text-primary)] font-bold">Sin datos disponibles</h3>
-                <p className="text-[var(--text-muted)] text-sm mt-1">Añade registros para ver resumen diario.</p>
-              </div>
-            ) : (
-              dailySummary.map((day) => (
-                <section key={day.date} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[var(--border-default)] bg-[var(--bg-app)] flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">{day.date}</h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">Total {day.total}h</p>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[var(--success-soft)] text-[var(--success)] whitespace-nowrap">
-                        Imputadas {day.imputedTotal}h
-                      </span>
-                      <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-[var(--danger-soft)] text-[var(--danger)] whitespace-nowrap">
-                        Sin imputar {day.pendingTotal}h
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2">
-                    <div className="p-4 border-b border-[var(--border-default)] lg:border-b-0 lg:border-r">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--success)]">Imputadas</h4>
-                        <span className="text-xs font-bold text-[var(--success)]">{day.imputedTotal}h</span>
-                      </div>
-
-                      {day.imputedCards.length === 0 ? (
-                        <p className="text-xs text-[var(--text-muted)]">Sin tarjetas imputadas.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {day.imputedCards.map((card) => (
-                            <div key={`imputed-${day.date}-${card.taskId}`} className="rounded-lg border border-[var(--success-soft)] bg-[var(--success-soft-alt)] px-3 py-2 flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-[var(--text-primary)] truncate" title={card.title}>{card.title}</div>
-                                <div className="flex items-center gap-3 mt-1">
-                                  {card.url ? (
-                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--brand-primary)] hover:underline">
-                                      Ver enlace
-                                    </a>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => openCommentsEditor(card.taskId, card.title)}
-                                    className="text-[11px] text-[var(--success)] hover:underline"
-                                  >
-                                    Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
-                                  </button>
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold text-[var(--success)] flex-shrink-0">{card.hours}h</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--danger)]">Sin imputar</h4>
-                        <span className="text-xs font-bold text-[var(--danger)]">{day.pendingTotal}h</span>
-                      </div>
-
-                      {day.pendingCards.length === 0 ? (
-                        <p className="text-xs text-[var(--text-muted)]">Sin tarjetas pendientes.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {day.pendingCards.map((card) => (
-                            <div key={`pending-${day.date}-${card.taskId}`} className="rounded-lg border border-[var(--danger-soft)] bg-[var(--danger-soft-alt)] px-3 py-2 flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-[var(--text-primary)] truncate" title={card.title}>{card.title}</div>
-                                <div className="flex items-center gap-3 mt-1">
-                                  {card.url ? (
-                                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--brand-primary)] hover:underline">
-                                      Ver enlace
-                                    </a>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => openCommentsEditor(card.taskId, card.title)}
-                                    className="text-[11px] text-[var(--danger)] hover:underline"
-                                  >
-                                    Comentarios {card.comments.length > 0 ? `(${card.comments.length})` : ''}
-                                  </button>
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold text-[var(--danger)] flex-shrink-0">{card.hours}h</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              ))
-            )}
-          </div>
+          <SummaryView
+            weeklySummary={weeklySummary}
+            dailySummary={dailySummary}
+            openCommentsEditor={openCommentsEditor}
+          />
         )}
       </main>
 
       <AnimatePresence>
         {commentTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-(--overlay) backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
+              className="bg-(--bg-surface) rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-[var(--border-default)] flex items-start justify-between gap-4">
+              <div className="p-6 border-b border-(--border-default) flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-[var(--text-primary)]">Comentarios tarea</h3>
-                  <p className="text-sm text-[var(--text-muted)] truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
+                  <h3 className="text-lg font-bold text-(--text-primary)">Comentarios tarea</h3>
+                  <p className="text-sm text-(--text-muted) truncate mt-1" title={commentTaskTitle}>{commentTaskTitle}</p>
                 </div>
                 <button
                   type="button"
                   onClick={closeCommentsEditor}
-                  className="p-2 text-[var(--text-muted)] hover:bg-[var(--bg-surface-muted)] rounded-lg"
+                  className="p-2 text-(--text-muted) hover:bg-(--bg-surface-muted) rounded-lg"
                   aria-label="Cerrar comentarios"
                 >
                   <X className="w-4 h-4" />
@@ -1142,18 +587,18 @@ export default function App() {
               <form onSubmit={handleSaveComments} className="p-6 space-y-4">
                 <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
                   {commentDrafts.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-soft)] px-4 py-6 text-sm text-[var(--text-muted)] text-center">
+                    <div className="rounded-lg border border-dashed border-(--border-default) bg-(--bg-surface-soft) px-4 py-6 text-sm text-(--text-muted) text-center">
                       Sin comentarios. Añade uno.
                     </div>
                   ) : (
                     commentDrafts.map((comment, index) => (
-                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-soft)] p-3 space-y-2">
+                      <div key={`${commentTaskId}-${index}`} className="rounded-lg border border-(--border-default) bg-(--bg-surface-soft) p-3 space-y-2">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Comentario {index + 1}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide text-(--text-muted)">Comentario {index + 1}</span>
                           <button
                             type="button"
                             onClick={() => handleDeleteCommentDraft(index)}
-                            className="text-xs font-bold text-[var(--danger-action)] hover:underline"
+                            className="text-xs font-bold text-(--danger-action) hover:underline"
                           >
                             Borrar
                           </button>
@@ -1166,7 +611,7 @@ export default function App() {
                           onChange={(e) => handleCommentDraftChange(index, e.target.value)}
                           rows={3}
                           placeholder="Escribe comentario"
-                          className="w-full px-3 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none resize-y"
+                          className="w-full px-3 py-2 bg-(--bg-surface) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none resize-y"
                         />
                       </div>
                     ))
@@ -1176,7 +621,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleAddCommentDraft}
-                  className="w-full py-2 border-2 border-dashed border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] rounded-lg text-sm font-medium transition-all"
+                  className="w-full py-2 border-2 border-dashed border-(--border-default) text-(--text-muted) hover:border-(--brand-primary) hover:text-(--brand-primary) rounded-lg text-sm font-medium transition-all"
                 >
                   Añadir comentario
                 </button>
@@ -1184,14 +629,14 @@ export default function App() {
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
+                    className="flex-1 py-2.5 bg-(--brand-primary) text-(--text-inverse) rounded-md font-bold hover:bg-(--brand-primary-hover) transition-colors"
                   >
                     Guardar comentarios
                   </button>
                   <button
                     type="button"
                     onClick={closeCommentsEditor}
-                    className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
+                    className="px-4 py-2.5 bg-(--bg-surface-muted) text-(--text-primary) rounded-md font-bold hover:bg-(--border-default) transition-colors"
                   >
                     Cancelar
                   </button>
@@ -1204,34 +649,34 @@ export default function App() {
 
       <AnimatePresence>
         {editingTaskId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--overlay)] backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-(--overlay) backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--bg-surface)] rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-(--bg-surface) rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-6">
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Editar tarea</h3>
+                <h3 className="text-lg font-bold text-(--text-primary) mb-4">Editar tarea</h3>
                 <form onSubmit={handleSaveTaskEdit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-surface-muted)] p-1">
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--bg-surface-muted) p-1">
                     <button
                       type="button"
                       onClick={() => setEditingMode('url')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'url' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                     >
                       URL Trello
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingMode('name')}
-                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-[var(--bg-surface)] text-[var(--brand-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                      className={`rounded-md px-3 py-2 text-sm font-bold transition-colors ${editingMode === 'name' ? 'bg-(--bg-surface) text-(--brand-primary) shadow-sm' : 'text-(--text-muted)'}`}
                     >
                       Tarea provisional
                     </button>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">
+                    <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">
                       {editingMode === 'url' ? 'Nueva URL Trello' : 'Nombre tarea'}
                     </label>
                     <input
@@ -1242,51 +687,58 @@ export default function App() {
                         ? setEditingUrlValue(e.target.value)
                         : setEditingNameValue(e.target.value)}
                       placeholder={editingMode === 'url' ? 'https://trello.com/c/...' : 'Ej: Revisión backlog sprint'}
-                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-(--bg-surface-soft) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
+                    <p className="text-[10px] text-(--text-muted) mt-1 italic">* Cambio aplica a todos registros misma tarea.</p>
                   </div>
                   <div>
-                      <label className="block text-xs font-bold text-[var(--text-muted)] mb-1 uppercase">Horas registro</label>
+                      <label className="block text-xs font-bold text-(--text-muted) mb-1 uppercase">Horas registro</label>
                     <input
                       type="number"
-                      step={roundingStep}
-                      min={roundingStep}
+                      step={0.25}
+                      min={0.25}
                       required
                       value={editingHours}
                       onChange={(e) => setEditingHours(e.target.value)}
-                      className="w-full px-3 py-2 bg-[var(--bg-surface-soft)] border border-[var(--border-default)] rounded-md text-sm focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent outline-none"
+                      className="w-full px-3 py-2 bg-(--bg-surface-soft) border border-(--border-default) rounded-md text-sm focus:ring-2 focus:ring-(--brand-primary) focus:border-transparent outline-none"
                     />
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
+                    <p className="text-[10px] text-(--text-muted) mt-1 italic">* Horas solo cambian este registro. Redondeo {roundingStep} arriba.</p>
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 bg-[var(--brand-primary)] text-[var(--text-inverse)] rounded-md font-bold hover:bg-[var(--brand-primary-hover)] transition-colors"
-                    >
-                      Guardar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingEntryId(null);
-                        setEditingTaskId(null);
-                        setEditingMode('name');
-                        setEditingUrlValue('');
-                        setEditingNameValue('');
-                        setEditingHours('');
-                      }}
-                      className="px-4 py-2.5 bg-[var(--bg-surface-muted)] text-[var(--text-primary)] rounded-md font-bold hover:bg-[var(--border-default)] transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
+                    <Button type="submit" className="flex-1 py-2 text-sm">Guardar</Button>
+                    <Button variant="secondary" type="button" onClick={() => {
+                       setEditingEntryId(null);
+                       setEditingTaskId(null);
+                       setEditingMode('name');
+                       setEditingUrlValue('');
+                       setEditingNameValue('');
+                       setEditingHours('');
+                     }} className="px-4 py-2 text-sm">Cancelar</Button>
+                   </div>
                 </form>
               </div>
             </motion.div>
           </div>
         ) : null}
       </AnimatePresence>
+
+      {/* Modal Imputar Horas */}
+      <AnimatePresence>
+        {imputeEntryId ? (
+          <ImputeModal
+            imputeEntryTitle={imputeEntry?.cardTitle ?? ''}
+            imputeNick={imputeNick}
+            setImputeNick={setImputeNick}
+            imputeCategory={imputeCategory}
+            setImputeCategory={setImputeCategory}
+            handleImputeSubmit={handleImputeSubmit}
+            closeImputeModal={closeImputeModal}
+            isSubmitting={isImputing}
+            error={imputeError}
+          />
+        ) : null}
+      </AnimatePresence>
+
     </div>
   );
 }
