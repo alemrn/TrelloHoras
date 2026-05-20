@@ -4,10 +4,20 @@
 // VITE_TRELLO_KEY=yourKey
 // VITE_TRELLO_TOKEN=yourToken
 
-const TRELLO_KEY = (import.meta as any).env?.VITE_TRELLO_KEY || '';
-const TRELLO_TOKEN = (import.meta as any).env?.VITE_TRELLO_TOKEN || '';
+const TRELLO_KEY = import.meta.env.VITE_TRELLO_KEY || '';
+const TRELLO_TOKEN = import.meta.env.VITE_TRELLO_TOKEN || '';
+const BOARD_ID = import.meta.env.VITE_BOARD_ID || '';
 
 const API_BASE = 'https://api.trello.com/1';
+
+// Debug: verify environment variables are loaded
+console.log('Trello credentials loaded:', {
+  keyExists: !!TRELLO_KEY,
+  tokenExists: !!TRELLO_TOKEN,
+  boardIdExists: !!BOARD_ID,
+  keyLength: TRELLO_KEY?.length || 0,
+  tokenLength: TRELLO_TOKEN?.length || 0,
+});
 
 function authQuery() {
   const params = new URLSearchParams();
@@ -46,14 +56,24 @@ export function parseCardShortLink(cardUrl: string): string | null {
 
 export async function getCardDetailsByUrl(cardUrl: string) {
   const shortLink = parseCardShortLink(cardUrl) || cardUrl;
-  const url = buildUrl(`/cards/${encodeURIComponent(shortLink)}`, {
-    fields: 'id,name,idBoard,shortLink,url,desc',
-    checklists: 'all',
-  });
+  const url = buildUrl(`/cards/${encodeURIComponent(shortLink)}`);
 
-  const res = await fetch(url);
+  console.log('Fetching card details from URL:', url);
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+  
   if (!res.ok) {
     const text = await res.text();
+    console.error('Trello API error:', {
+      status: res.status,
+      statusText: res.statusText,
+      body: text,
+      url: url,
+    });
     throw new Error(`Trello get card failed: ${res.status} ${text}`);
   }
 
@@ -61,21 +81,17 @@ export async function getCardDetailsByUrl(cardUrl: string) {
   return card;
 }
 
-export async function getBoardName(boardId: string) {
-  const url = buildUrl(`/boards/${boardId}`, { fields: 'name' });
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Trello get board failed: ${res.status} ${text}`);
-  }
-  const board = await res.json();
-  return board.name as string;
-}
+
 
 export async function findOrCreateChecklist(cardId: string, checklistName: string) {
   // Get checklists for card
   const url = buildUrl(`/cards/${cardId}/checklists`);
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Trello get checklists failed: ${res.status} ${text}`);
@@ -88,7 +104,10 @@ export async function findOrCreateChecklist(cardId: string, checklistName: strin
   const createUrl = buildUrl(`/cards/${cardId}/checklists`);
   const createRes = await fetch(createUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ name: checklistName }),
   });
   if (!createRes.ok) {
@@ -99,12 +118,21 @@ export async function findOrCreateChecklist(cardId: string, checklistName: strin
   return created.id;
 }
 
-export async function addChecklistItem(checklistId: string, itemName: string) {
+export async function addChecklistItem(checklistId: string, itemName: string, date: string, memberId: string) {
   const url = buildUrl(`/checklists/${checklistId}/checkItems`);
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: itemName, pos: 'bottom' }),
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: itemName,
+      checked: true,
+      due: date,
+      idMember: memberId,
+      pos: 'bottom'
+    }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -113,28 +141,47 @@ export async function addChecklistItem(checklistId: string, itemName: string) {
   return await res.json();
 }
 
+import { TimeEntry } from './types';
 import { formatHoursForDisplay } from './utils';
 
-export async function addHoursToCard(cardUrl: string, hours: number | string, user: string, dateISO?: string) {
+export async function addHoursToCard(entry: TimeEntry, user: string, dateISO?: string) {
+  console.log('addHoursToCard called with:', { entry, dateISO });
+  
   if (!TRELLO_KEY || !TRELLO_TOKEN) {
     throw new Error('Trello API credentials missing. Set VITE_TRELLO_KEY and VITE_TRELLO_TOKEN in your .env');
   }
-
-  const card = await getCardDetailsByUrl(cardUrl);
-  if (!card || !card.id) throw new Error('Card not found');
-
-  const boardName = await getBoardName(card.idBoard);
-  if (!boardName || boardName.toLowerCase() !== 'seguimiento') {
-    throw new Error(`Card is not in board 'seguimiento' (found '${boardName}')`);
+  if (!BOARD_ID) {
+    throw new Error('Board ID missing. Set VITE_BOARD_ID in your .env');
   }
 
-  const checklistName = 'Horas invertidas';
+  const card = await getCardDetailsByUrl(entry.cardUrl);
+  if (!card || !card.id) throw new Error('Card not found');
+
+  if (card.idBoard !== BOARD_ID) {
+    throw new Error(`Card is not in the expected board (found '${card.idBoard}', expected '${BOARD_ID}')`);
+  }
+
+  //TODO: buscar los miembros del tablero y verificar que el usuario existe y obtener su id para asignar la tarea. Por ahora se asigna al usuario que hizo la petición
+  //TODO: usar la siguiente url para obtener el id del miembro:   --url 'https://api.trello.com/1/boards/{id}/members?key=APIKey&token=APIToken'
+  //TODO: mejorar el mensaje de las horas asignado si son de producción, desarrollo, gestión o validación. Por ahora se asigna solo el número de horas sin especificar el tipo de horas.
+
+  const checklistName = 'Horas';
   const checklistId = await findOrCreateChecklist(card.id, checklistName);
 
   const today = dateISO || new Date().toISOString().split('T')[0];
-  const hoursDisplay = formatHoursForDisplay(hours);
-  const itemText = `${hoursDisplay}h — ${user} — ${today}`;
+  const hoursDisplay = formatHoursForDisplay(entry.hours);
+  const itemText = `${hoursDisplay}h${formatTypeOfHours(entry.imputedCategory)}`;
 
-  const item = await addChecklistItem(checklistId, itemText);
+  const item = await addChecklistItem(checklistId, itemText, today, user);
   return { card, checklistId, item };
 }
+function formatTypeOfHours(imputedCategory: string | undefined) {
+  
+  if (!imputedCategory) return '';
+  if (imputedCategory.toLowerCase().includes('prod')) return '-P';
+  if (imputedCategory.toLowerCase().includes('gest')) return '-G';
+  if (imputedCategory.toLowerCase().includes('val')) return '-V';
+  return '';
+
+}
+

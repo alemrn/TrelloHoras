@@ -1,7 +1,7 @@
 export interface TimeEntry {
   id: string;
   taskId: string;
-  cardUrl?: string | null;
+  cardUrl: string;
   cardTitle: string;
   comments?: string[];
   date: string; // ISO date string (YYYY-MM-DD)

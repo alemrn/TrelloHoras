@@ -31,6 +31,7 @@ import SummaryView from './components/SummaryView';
 import ImputeModal from './components/ImputeModal';
 import Header from './components/Header';
 import { TimeEntry, ActiveTimer } from './types';
+import { addHoursToCard } from './trello';
 import {
   STORAGE_KEY,
   ROUNDING_MODE_KEY,
@@ -348,7 +349,7 @@ export default function App() {
       const entry = entries.find(en => en.id === imputeEntryId);
       if (entry && entry.cardUrl) {
         // push to Trello: may throw on network or validation errors
-        //await addHoursToCard(entry.cardUrl, entry.hours, nick);
+        await addHoursToCard(entry, nick);
       }
 
       setEntries(prev =>
