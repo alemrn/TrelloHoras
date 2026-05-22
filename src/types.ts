@@ -1,12 +1,15 @@
 export interface TimeEntry {
   id: string;
   taskId: string;
-  cardUrl?: string | null;
+  cardUrl: string;
   cardTitle: string;
   comments?: string[];
   date: string; // ISO date string (YYYY-MM-DD)
   hours: number;
   imputed: boolean;
+  // Opcional: quien imputó la hora y la categoría seleccionada
+  imputedBy?: string;
+  imputedCategory?: string;
 }
 
 export interface ActiveTimer {
