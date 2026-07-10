@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { Clock, Layout, BarChart3, Moon, Sun } from 'lucide-react';
+import { Clock, Layout, BarChart3, Moon, Sun, LayoutDashboard } from 'lucide-react';
 import Button, { IconButton } from './Button';
 
 type Props = {
   // Valores iniciales opcionales — si se pasan, los usará como estado inicial
-  initialView?: 'tracker' | 'summary';
-  onViewChange?: (v: 'tracker' | 'summary') => void;
+  initialView?: 'tracker' | 'summary' | 'dashboard';
+  onViewChange?: (v: 'tracker' | 'summary' | 'dashboard') => void;
   initialIsDarkMode?: boolean;
   onThemeChange?: (b: boolean) => void;
 };
 
 export default function Header({ initialView = 'tracker', onViewChange, initialIsDarkMode, onThemeChange }: Props) {
-  const [view, setView] = useState<'tracker' | 'summary'>(initialView);
+  const [view, setView] = useState<'tracker' | 'summary' | 'dashboard'>(initialView);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof initialIsDarkMode === 'boolean') return initialIsDarkMode;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -25,7 +25,7 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
     });
   };
 
-  const handleSetView = (v: 'tracker' | 'summary') => {
+  const handleSetView = (v: 'tracker' | 'summary' | 'dashboard') => {
     setView(v);
     onViewChange?.(v);
   };
@@ -66,6 +66,13 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
             >
               <BarChart3 className="w-4 h-4" />
               Resumen
+            </button>
+            <button
+              onClick={() => handleSetView('dashboard')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'dashboard' ? 'bg-(--bg-surface) shadow-sm text-(--brand-primary)' : 'text-(--text-muted) hover:bg-(--border-default)'}`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
             </button>
           </nav>
         </div>
