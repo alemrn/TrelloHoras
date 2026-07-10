@@ -37,6 +37,7 @@ jobs:
         env:
           VITE_TRELLO_KEY: ${{ secrets.VITE_TRELLO_KEY }}
           VITE_TRELLO_TOKEN: ${{ secrets.VITE_TRELLO_TOKEN }}
+          VITE_BOARD_ID: ${{ secrets.VITE_BOARD_ID }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
