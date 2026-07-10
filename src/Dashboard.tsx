@@ -7,11 +7,11 @@ import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, LayoutDashboard }
 import { motion } from 'motion/react';
 
 const IGNORED_USERS = [
-  'Andoni', 'Xabi Eguia', 'Amaia Valle Gómez', 'Diego', 
-  'Julen', 'Eder', 'Jon Velasco', 'Jonathan Santos'
+  'Andoni', 'Xabi Eguia', 'Xabier', 'Amaia Valle Gómez', 'Amaia Valle', 'Diego', 
+  'Julen', 'Eder', 'Jon Velasco', 'Jonathan Santos', 'Selenium Test'
 ];
 
-const TARGET_LISTS = ['Desarrollando', 'PR', 'backlog', 'estimar'];
+const TARGET_LISTS = ['Desarrollando', 'backlog', 'estimar'];
 
 interface MemberStats {
   member: TrelloMember;
@@ -20,9 +20,13 @@ interface MemberStats {
   remainingHours: number;
   
   desarrollandoCards: number;
+  desarrollandoCardIds: number[];
   desarrollandoRemainingHours: number;
+  desarrollandoEstimated: number;
+  desarrollandoInvested: number;
   
   backlogCards: number;
+  backlogCardIds: number[];
   backlogRemainingHours: number;
 
   cardsToEstimate: number;
@@ -77,12 +81,13 @@ export const Dashboard: React.FC = () => {
         let cardsToEstimate = 0;
         
         let desarrollandoCards = 0;
+        let desarrollandoCardIds: number[] = [];
         let desarrollandoEstimated = 0;
         let desarrollandoInvested = 0;
         
         let backlogCards = 0;
+        let backlogCardIds: number[] = [];
         let backlogEstimated = 0;
-        let backlogInvested = 0;
 
         memberCards.forEach(card => {
           let cardEst = 0;
@@ -97,27 +102,25 @@ export const Dashboard: React.FC = () => {
             if (invItem?.value?.number) cardInv = parseFloat(invItem.value.number);
           }
           
-          totalEstimated += cardEst;
-          totalInvested += cardInv;
-
           const listName = relevantLists.find(l => l.id === card.idList)?.name.toLowerCase() || '';
           
           if (card.idList === listEstimarId) {
             cardsToEstimate++;
           } else if (listName.includes('desarrollando')) {
             desarrollandoCards++;
+            if (card.idShort) desarrollandoCardIds.push(card.idShort);
             desarrollandoEstimated += cardEst;
             desarrollandoInvested += cardInv;
-          } else if (listName.includes('backlog') || listName.includes('pr')) {
+          } else if (listName.includes('backlog')) {
             backlogCards++;
+            if (card.idShort) backlogCardIds.push(card.idShort);
             backlogEstimated += cardEst;
-            backlogInvested += cardInv;
           }
         });
 
-        const remainingHours = Math.max(0, totalEstimated - totalInvested);
         const desarrollandoRemainingHours = Math.max(0, desarrollandoEstimated - desarrollandoInvested);
-        const backlogRemainingHours = Math.max(0, backlogEstimated - backlogInvested);
+        const backlogRemainingHours = Math.max(0, backlogEstimated);
+        const remainingHours = desarrollandoRemainingHours + backlogRemainingHours;
         
         // Logic for workload status:
         // 3 days view is ~24h. If they have < 24h and 0 cards to estimate, they need work.
@@ -136,8 +139,12 @@ export const Dashboard: React.FC = () => {
           remainingHours,
           cardsToEstimate,
           desarrollandoCards,
+          desarrollandoCardIds,
           desarrollandoRemainingHours,
+          desarrollandoEstimated,
+          desarrollandoInvested,
           backlogCards,
+          backlogCardIds,
           backlogRemainingHours,
           needsMoreWork,
           status
@@ -215,14 +222,28 @@ export const Dashboard: React.FC = () => {
               <tr>
                 <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider">Desarrollador</th>
                 <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider">Desarrollando</th>
-                <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider">Backlog / PR</th>
+                <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider">Backlog</th>
                 <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider text-center">Por Estimar</th>
                 <th className="px-5 py-4 font-semibold uppercase text-xs tracking-wider">Estado (3 días)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-default)]">
-              {stats.map(({ member, desarrollandoRemainingHours, desarrollandoCards, backlogRemainingHours, backlogCards, cardsToEstimate, status }, idx) => (
-                <motion.tr 
+              {stats.map(({ member, desarrollandoRemainingHours, desarrollandoEstimated, desarrollandoInvested, desarrollandoCards, desarrollandoCardIds, backlogRemainingHours, backlogCards, backlogCardIds, cardsToEstimate, status }, idx) => {
+                
+                let devColorClass = "text-green-600 dark:text-green-400";
+                if (desarrollandoEstimated > 0) {
+                  const ratio = desarrollandoInvested / desarrollandoEstimated;
+                  if (desarrollandoInvested > desarrollandoEstimated) {
+                    devColorClass = "text-red-600 dark:text-red-400";
+                  } else if (ratio >= 0.8) {
+                    devColorClass = "text-yellow-600 dark:text-yellow-400";
+                  }
+                } else if (desarrollandoInvested > 0) {
+                  devColorClass = "text-red-600 dark:text-red-400";
+                }
+                
+                return (
+                  <motion.tr 
                   key={member.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -242,17 +263,39 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </td>
                   
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 align-top">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-[var(--text-primary)] text-base">{desarrollandoRemainingHours.toFixed(1)}h</span>
-                      <span className="text-xs text-[var(--text-muted)]">{desarrollandoCards} tareas</span>
+                      <span className={`font-semibold text-base ${devColorClass}`}>
+                        {desarrollandoInvested.toFixed(1)}h / {desarrollandoEstimated.toFixed(1)}h
+                      </span>
+                      {desarrollandoCardIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1.5 max-w-[140px]">
+                          {desarrollandoCardIds.map(id => (
+                            <span key={id} className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] border border-[var(--brand-primary)]/20 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none">
+                              #{id}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)] mt-1">{desarrollandoCards} tareas</span>
+                      )}
                     </div>
                   </td>
                   
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 align-top">
                     <div className="flex flex-col">
                       <span className="font-semibold text-[var(--text-primary)] text-base">{backlogRemainingHours.toFixed(1)}h</span>
-                      <span className="text-xs text-[var(--text-muted)]">{backlogCards} tareas</span>
+                      {backlogCardIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1.5 max-w-[140px]">
+                          {backlogCardIds.map(id => (
+                            <span key={id} className="bg-[var(--bg-surface-muted)] text-[var(--text-primary)] border border-[var(--border-default)] px-1.5 py-0.5 rounded text-[10px] font-medium leading-none">
+                              #{id}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)] mt-1">{backlogCards} tareas</span>
+                      )}
                     </div>
                   </td>
                   
@@ -286,7 +329,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </td>
                 </motion.tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

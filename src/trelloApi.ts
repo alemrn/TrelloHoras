@@ -1,4 +1,4 @@
-const API_KEY = import.meta.env.VITE_TRELLO_API_KEY;
+const API_KEY = import.meta.env.VITE_TRELLO_KEY;
 const TOKEN = import.meta.env.VITE_TRELLO_TOKEN;
 const BOARD_ID = 'rJvXfU7D';
 
@@ -33,6 +33,8 @@ export interface TrelloCustomField {
 
 export interface TrelloCard {
   id: string;
+  idShort?: number;
+  url?: string;
   name: string;
   idList: string;
   idMembers: string[];

@@ -35,7 +35,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_TRELLO_API_KEY: ${{ secrets.VITE_TRELLO_API_KEY }}
+          VITE_TRELLO_KEY: ${{ secrets.VITE_TRELLO_KEY }}
           VITE_TRELLO_TOKEN: ${{ secrets.VITE_TRELLO_TOKEN }}
 
       - name: Setup Pages
