@@ -4,14 +4,14 @@ import Button, { IconButton } from './Button';
 
 type Props = {
   // Valores iniciales opcionales — si se pasan, los usará como estado inicial
-  initialView?: 'tracker' | 'summary' | 'dashboard';
-  onViewChange?: (v: 'tracker' | 'summary' | 'dashboard') => void;
+  initialView?: 'tracker' | 'summary' | 'dashboard' | 'cuadromando';
+  onViewChange?: (v: 'tracker' | 'summary' | 'dashboard' | 'cuadromando') => void;
   initialIsDarkMode?: boolean;
   onThemeChange?: (b: boolean) => void;
 };
 
 export default function Header({ initialView = 'tracker', onViewChange, initialIsDarkMode, onThemeChange }: Props) {
-  const [view, setView] = useState<'tracker' | 'summary' | 'dashboard'>(initialView);
+  const [view, setView] = useState<'tracker' | 'summary' | 'dashboard' | 'cuadromando'>(initialView);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof initialIsDarkMode === 'boolean') return initialIsDarkMode;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -25,7 +25,7 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
     });
   };
 
-  const handleSetView = (v: 'tracker' | 'summary' | 'dashboard') => {
+  const handleSetView = (v: 'tracker' | 'summary' | 'dashboard' | 'cuadromando') => {
     setView(v);
     onViewChange?.(v);
   };
@@ -73,6 +73,13 @@ export default function Header({ initialView = 'tracker', onViewChange, initialI
             >
               <LayoutDashboard className="w-4 h-4" />
               Dashboard
+            </button>
+            <button
+              onClick={() => handleSetView('cuadromando')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${view === 'cuadromando' ? 'bg-(--bg-surface) shadow-sm text-(--brand-primary)' : 'text-(--text-muted) hover:bg-(--border-default)'}`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Cuadro de Mando
             </button>
           </nav>
         </div>

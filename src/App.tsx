@@ -31,6 +31,7 @@ import SummaryView from './components/SummaryView';
 import ImputeModal from './components/ImputeModal';
 import Header from './components/Header';
 import { Dashboard } from './Dashboard';
+import { CuadroMando } from './CuadroMando';
 import { TimeEntry, ActiveTimer } from './types';
 import { addHoursToCard } from './trello';
 import {
@@ -63,7 +64,7 @@ export default function App() {
   });
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [view, setView] = useState<'tracker' | 'summary' | 'dashboard'>('tracker');
+  const [view, setView] = useState<'tracker' | 'summary' | 'dashboard' | 'cuadromando'>('tracker');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem(THEME_MODE_KEY);
 
@@ -523,9 +524,11 @@ export default function App() {
         onThemeChange={setIsDarkMode}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className={`mx-auto px-4 py-8 w-full ${view === 'dashboard' || view === 'cuadromando' ? 'max-w-[1600px]' : 'max-w-5xl'}`}>
         {view === 'dashboard' ? (
           <Dashboard />
+        ) : view === 'cuadromando' ? (
+          <CuadroMando />
         ) : view === 'tracker' ? (
           <TrackerView
             entries={entries}
