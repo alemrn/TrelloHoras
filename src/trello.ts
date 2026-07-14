@@ -83,7 +83,7 @@ export async function getCardDetailsByUrl(cardUrl: string) {
 
 
 
-export async function findOrCreateChecklist(cardId: string, checklistName: string) {
+export async function findChecklist(cardId: string, checklistName: string) {
   // Get checklists for card
   const url = buildUrl(`/cards/${cardId}/checklists`);
   const res = await fetch(url, {
@@ -100,25 +100,11 @@ export async function findOrCreateChecklist(cardId: string, checklistName: strin
   const found = checklists.find((c: any) => String(c.name).toLowerCase() === checklistName.toLowerCase());
   if (found) return found.id;
 
-  // create checklist on card
-  const createUrl = buildUrl(`/cards/${cardId}/checklists`);
-  const createRes = await fetch(createUrl, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name: checklistName }),
-  });
-  if (!createRes.ok) {
-    const text = await createRes.text();
-    throw new Error(`Trello create checklist failed: ${createRes.status} ${text}`);
-  }
-  const created = await createRes.json();
-  return created.id;
+  throw new Error(`No se encontró la checklist "${checklistName}" en la tarjeta. Por favor, créala primero en Trello.`);
 }
 
-export async function addChecklistItem(checklistId: string, itemName: string, date: string, memberId: string) {
+export async function addChecklistItem(cardId: string, checklistId: string, itemName: string, date: string, memberId: string) {
+  // 1. Crear el checkItem en la checklist
   const url = buildUrl(`/checklists/${checklistId}/checkItems`);
   const res = await fetch(url, {
     method: 'POST',
@@ -129,8 +115,6 @@ export async function addChecklistItem(checklistId: string, itemName: string, da
     body: JSON.stringify({
       name: itemName,
       checked: true,
-      due: date,
-      idMember: memberId,
       pos: 'bottom'
     }),
   });
@@ -138,7 +122,28 @@ export async function addChecklistItem(checklistId: string, itemName: string, da
     const text = await res.text();
     throw new Error(`Trello add check item failed: ${res.status} ${text}`);
   }
-  return await res.json();
+  const createdItem = await res.json();
+
+  // 2. Actualizar el checkItem con la fecha de vencimiento y el miembro asignado en la tarjeta
+  const updateUrl = buildUrl(`/cards/${cardId}/checkItem/${createdItem.id}`);
+  const updateRes = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      due: date,
+      idMember: memberId,
+      state: 'complete'
+    }),
+  });
+  if (!updateRes.ok) {
+    const text = await updateRes.text();
+    console.warn(`Trello update check item details failed: ${updateRes.status} ${text}`);
+  }
+
+  return createdItem;
 }
 
 import { TimeEntry } from './types';
@@ -161,27 +166,64 @@ export async function addHoursToCard(entry: TimeEntry, user: string, dateISO?: s
     throw new Error(`Card is not in the expected board (found '${card.idBoard}', expected '${BOARD_ID}')`);
   }
 
-  //TODO: buscar los miembros del tablero y verificar que el usuario existe y obtener su id para asignar la tarea. Por ahora se asigna al usuario que hizo la petición
-  //TODO: usar la siguiente url para obtener el id del miembro:   --url 'https://api.trello.com/1/boards/{id}/members?key=APIKey&token=APIToken'
-  //TODO: mejorar el mensaje de las horas asignado si son de producción, desarrollo, gestión o validación. Por ahora se asigna solo el número de horas sin especificar el tipo de horas.
+  // Resolver el Nick de Trello a un ID de miembro de 24 caracteres
+  const membersUrl = buildUrl(`/boards/${BOARD_ID}/members`);
+  const membersRes = await fetch(membersUrl, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
 
-  const checklistName = 'Horas';
-  const checklistId = await findOrCreateChecklist(card.id, checklistName);
+  let resolvedMemberId = '';
+  if (membersRes.ok) {
+    const members = await membersRes.json();
+    const cleanUser = user.trim().toLowerCase();
+    const foundMember = members.find((m: any) =>
+      m.username.toLowerCase() === cleanUser ||
+      m.fullName.toLowerCase() === cleanUser ||
+      m.id === cleanUser
+    );
+    if (foundMember) {
+      resolvedMemberId = foundMember.id;
+    }
+  }
 
-  const today = dateISO || new Date().toISOString().split('T')[0];
+  // Fallback: si no está en el tablero, intentar buscar el miembro en Trello de manera global
+  if (!resolvedMemberId) {
+    const userUrl = buildUrl(`/members/${encodeURIComponent(user.trim())}`);
+    const userRes = await fetch(userUrl, { method: 'GET' });
+    if (userRes.ok) {
+      const uData = await userRes.json();
+      resolvedMemberId = uData.id;
+    }
+  }
+
+  if (!resolvedMemberId) {
+    throw new Error(`No se encontró ningún miembro en Trello con el Nick "${user}". Verifica el nombre.`);
+  }
+
+  const checklistName = 'Horas invertidas';
+  const checklistId = await findChecklist(card.id, checklistName);
+
+  const targetDate = dateISO || entry.date || new Date().toISOString().split('T')[0];
   const hoursDisplay = formatHoursForDisplay(entry.hours);
-  const itemText = `${hoursDisplay}h${formatTypeOfHours(entry.imputedCategory)}`;
+  const typeChar = formatTypeOfHours(entry.imputedCategory);
+  
+  // Formato: {horas} {inicial} {comentario} (sin "h" y sin guiones)
+  const commentsText = entry.comments && entry.comments.length > 0 ? ` ${entry.comments.join(', ')}` : '';
+  const itemText = `${hoursDisplay} ${typeChar}${commentsText}`;
 
-  const item = await addChecklistItem(checklistId, itemText, today, user);
+  const item = await addChecklistItem(card.id, checklistId, itemText, targetDate, resolvedMemberId);
   return { card, checklistId, item };
 }
 function formatTypeOfHours(imputedCategory: string | undefined) {
-  
-  if (!imputedCategory) return '';
-  if (imputedCategory.toLowerCase().includes('prod')) return '-P';
-  if (imputedCategory.toLowerCase().includes('gest')) return '-G';
-  if (imputedCategory.toLowerCase().includes('val')) return '-V';
-  return '';
-
+  if (!imputedCategory) return 'D'; // Fallback a Desarrollo
+  const cat = imputedCategory.toLowerCase();
+  if (cat.includes('dev') || cat.includes('desarrollo')) return 'D';
+  if (cat.includes('gest')) return 'G';
+  if (cat.includes('val')) return 'V';
+  if (cat.includes('prod')) return 'P'; // Producción -> 'P'
+  return 'D';
 }
 

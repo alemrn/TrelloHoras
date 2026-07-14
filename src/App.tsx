@@ -32,7 +32,7 @@ import ImputeModal from './components/ImputeModal';
 import Header from './components/Header';
 import { Dashboard } from './Dashboard';
 import { TimeEntry, ActiveTimer } from './types';
-import { addHoursToCard } from './trello';
+import { addHoursToCard, getCardDetailsByUrl } from './trello';
 import {
   STORAGE_KEY,
   ROUNDING_MODE_KEY,
@@ -143,6 +143,27 @@ export default function App() {
     ))?.taskId;
   };
 
+  const resolveTrelloCardTitle = async (cardUrl: string, taskId: string) => {
+    try {
+      const card = await getCardDetailsByUrl(cardUrl);
+      if (card && card.name) {
+        setEntries(prev =>
+          prev.map(entry =>
+            entry.taskId === taskId ? { ...entry, cardTitle: card.name } : entry
+          )
+        );
+        setActiveTimer(prev => {
+          if (prev && prev.taskId === taskId) {
+            return { ...prev, cardTitle: card.name };
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      console.warn('No se pudo resolver el título real de la tarjeta desde Trello:', err);
+    }
+  };
+
   const getTaskComments = (taskId?: string | null) =>
     taskId
       ? entries.find(entry => entry.taskId === taskId)?.comments ?? []
@@ -188,6 +209,11 @@ export default function App() {
       comments: nextComments,
       startTime: Date.now()
     });
+
+    if (nextCardUrl) {
+      resolveTrelloCardTitle(nextCardUrl, taskId);
+    }
+
     setTempTaskValue('');
     setTempTimerComment('');
     setTimerInputMode('url');
@@ -249,6 +275,10 @@ export default function App() {
 
     setEntries(prev => [newEntry, ...prev]);
     setIsAddingManual(false);
+
+    if (cardUrl) {
+      resolveTrelloCardTitle(cardUrl, taskId);
+    }
   };
 
   const openTaskEditor = (entry: TimeEntry) => {
@@ -306,6 +336,10 @@ export default function App() {
     setEditingUrlValue('');
     setEditingNameValue('');
     setEditingHours('');
+
+    if (nextCardUrl) {
+      resolveTrelloCardTitle(nextCardUrl, nextTaskId);
+    }
   };
 
   const handleDeleteEntry = (id: string) => {
@@ -348,10 +382,7 @@ export default function App() {
 
     try {
       const entry = entries.find(en => en.id === imputeEntryId);
-      if (entry && entry.cardUrl) {
-        // push to Trello: may throw on network or validation errors
-        await addHoursToCard(entry, nick);
-      }
+        await addHoursToCard({ ...entry, imputedCategory: imputeCategory }, nick);
 
       setEntries(prev =>
         prev.map(entry =>
